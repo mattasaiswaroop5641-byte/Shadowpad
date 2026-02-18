@@ -1,0 +1,26 @@
+{
+  "name": "shadowpad",
+  "version": "1.0.0",
+  "description": "A real-time, end-to-end encrypted collaborative workspace.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "collaboration",
+    "real-time",
+    "socket.io",
+    "encrypted",
+    "workspace"
+  ],
+  "author": "M.G.Sai Swarup",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

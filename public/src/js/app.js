@@ -1,0 +1,303 @@
+const socket = io();
+
+// Element Selectors from your HTML
+const authModule = document.getElementById('auth-module');
+const appModule = document.getElementById('app-module');
+const createForm = document.getElementById('create-form');
+const joinForm = document.getElementById('join-form');
+const editor = document.getElementById('main-editor');
+const roomIdDisplay = document.getElementById('room-id-display');
+const roomNameDisplay = document.querySelector('.room-name');
+const userList = document.getElementById('user-list');
+const userCountBadge = document.getElementById('user-count');
+const userCounterText = document.getElementById('user-counter-text');
+const activityList = document.getElementById('activity-list');
+const leaveBtn = document.getElementById('leave-btn');
+const permEdit = document.getElementById('perm-edit');
+const permUpload = document.getElementById('perm-upload');
+const permDelete = document.getElementById('perm-delete');
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const fileList = document.getElementById('file-list');
+const fileCountBadge = document.getElementById('file-count');
+
+let currentRoomId = null;
+let roomFiles = []; // Local cache for file content
+
+// Tab Switching Logic
+document.querySelectorAll('.tab-btn').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+
+        tab.classList.add('active');
+        const targetForm = document.getElementById(`${tab.dataset.tab}-form`);
+        if (targetForm) targetForm.classList.add('active');
+    });
+});
+
+// Handle Creating a Room
+createForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const roomName = document.getElementById('room-name').value;
+    const userName = document.getElementById('owner-name').value;
+    const password = document.getElementById('create-password').value;
+    socket.emit('create-room', { roomName, password, userName });
+});
+
+// Handle Joining a Room
+joinForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const roomId = document.getElementById('join-room-id').value.toUpperCase();
+    const userName = document.getElementById('join-name').value;
+    const password = document.getElementById('join-password').value;
+    socket.emit('join-room', { roomId, password, userName });
+});
+
+// UI Transition Logic
+function enterRoom(id, name, content, users, isHost, files) {
+    currentRoomId = id;
+    authModule.classList.remove('active');
+    appModule.classList.add('active');
+    roomNameDisplay.innerText = name;
+    roomIdDisplay.innerText = id;
+    editor.value = content;
+    
+    // Handle Host Permissions
+    if (isHost) {
+        document.body.classList.add('is-host');
+    } else {
+        document.body.classList.remove('is-host');
+    }
+    
+    updateUserList(users);
+    updateFileList(files);
+}
+
+socket.on('room-created', (data) => enterRoom(data.roomId, data.roomName, "", data.users, data.isHost, data.files));
+socket.on('joined-successfully', (data) => enterRoom(data.roomId, data.roomName, data.content, data.users, data.isHost, data.files));
+socket.on('error-msg', (msg) => alert(msg));
+
+// Handle Host Migration
+socket.on('you-are-host', () => {
+    document.body.classList.add('is-host');
+    alert("You are now the host of this room.");
+});
+
+// Handle User List Updates
+function updateUserList(users) {
+    userList.innerHTML = ''; // Clear current list
+    users.forEach(user => {
+        const userInitial = user.name.charAt(0).toUpperCase();
+        const li = document.createElement('li');
+        li.className = 'user-item';
+        
+        const hostBadge = user.isHost ? '<span class="user-tag host" title="Host">👑</span>' : '';
+        const youBadge = user.id === socket.id ? '<span class="user-tag">(You)</span>' : '';
+        
+        li.innerHTML = `
+            <div class="user-avatar">${userInitial}</div>
+            <span class="user-name">${user.name}</span>
+            ${hostBadge}
+            ${youBadge}
+        `;
+        userList.appendChild(li);
+    });
+    const count = users.length;
+    userCountBadge.innerText = count;
+    userCounterText.innerText = `${count}/20`;
+}
+
+socket.on('update-user-list', (users) => {
+    updateUserList(users);
+});
+
+// Handle File Uploads
+uploadZone.addEventListener('click', () => {
+    if (!uploadZone.classList.contains('disabled')) fileInput.click();
+});
+
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!uploadZone.classList.contains('disabled')) {
+        uploadZone.classList.add('active');
+    }
+});
+
+uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('active');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('active');
+    const files = e.dataTransfer.files;
+    if (files.length) handleFiles(files);
+});
+
+fileInput.addEventListener('change', (e) => {
+    const files = e.target.files;
+    if (files.length) handleFiles(files);
+    e.target.value = ''; // Reset input
+});
+
+function handleFiles(files) {
+    if (uploadZone.classList.contains('disabled') && !document.body.classList.contains('is-host')) {
+        alert("File uploads are disabled by the host.");
+        return;
+    }
+    for (const file of files) {
+        if (file.size > 25 * 1000 * 1000) { // 25MB limit (matches server config)
+            alert(`File "${file.name}" is too large (max 25MB).`);
+            continue;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const fileData = { name: file.name, type: file.type, size: file.size, content: e.target.result };
+            socket.emit('upload-file', { roomId: currentRoomId, file: fileData });
+        };
+        reader.readAsArrayBuffer(file);
+    }
+}
+
+function updateFileList(files) {
+    roomFiles = files; // Update local cache
+    fileList.innerHTML = '';
+    files.forEach(file => {
+        const li = document.createElement('li');
+        li.className = 'file-item';
+        li.dataset.fileId = file.id;
+        li.innerHTML = `
+            <span class="file-icon">📄</span>
+            <div class="file-info">
+                <span class="file-name" title="${file.name}">${file.name}</span>
+                <span class="file-size">${(file.size / 1024).toFixed(1)} KB</span>
+            </div>
+            <div class="file-actions">
+                <button class="file-action-btn" data-action="download" title="Download">📥</button>
+                <button class="file-action-btn danger" data-action="delete" title="Delete">🗑️</button>
+            </div>
+        `;
+        fileList.appendChild(li);
+    });
+    fileCountBadge.innerText = files.length;
+}
+
+socket.on('update-file-list', (files) => {
+    updateFileList(files);
+});
+
+// Handle Activity Log
+socket.on('activity-log', (message) => {
+    const li = document.createElement('li');
+    li.textContent = message;
+    activityList.prepend(li); // Add new activity to the top
+});
+
+// Handle Leaving the Room
+leaveBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to leave the room?')) {
+        window.location.reload(); // Simple way to leave: just reload the page
+    }
+});
+
+// Handle Permissions
+permEdit.addEventListener('change', () => {
+    if (currentRoomId) {
+        socket.emit('update-permissions', { 
+            roomId: currentRoomId, 
+            allowEdit: permEdit.checked 
+        });
+    }
+});
+
+socket.on('update-permissions', (data) => {
+    // Update checkbox state visually for everyone (though only host can click it)
+    permEdit.checked = data.allowEdit;
+    if (data.allowUpload !== undefined) permUpload.checked = data.allowUpload;
+    if (data.allowDelete !== undefined) permDelete.checked = data.allowDelete;
+    
+    // If I am not the host, enforce the permission
+    if (!document.body.classList.contains('is-host')) {
+        editor.disabled = !data.allowEdit;
+        editor.placeholder = data.allowEdit ? "Start typing..." : "Editing disabled by host.";
+        
+        if (data.allowUpload) {
+            uploadZone.classList.remove('disabled');
+        } else {
+            uploadZone.classList.add('disabled');
+        }
+
+        // Toggle delete buttons visibility based on permission
+        if (data.allowDelete) {
+            fileList.classList.remove('delete-disabled');
+        } else {
+            fileList.classList.add('delete-disabled');
+        }
+    }
+});
+
+permUpload.addEventListener('change', () => {
+    if (currentRoomId) {
+        socket.emit('update-permissions', { 
+            roomId: currentRoomId, 
+            allowUpload: permUpload.checked 
+        });
+    }
+});
+
+permDelete.addEventListener('change', () => {
+    if (currentRoomId) {
+        socket.emit('update-permissions', { 
+            roomId: currentRoomId, 
+            allowDelete: permDelete.checked 
+        });
+    }
+});
+
+// Real-time Text Syncing
+editor.addEventListener('input', () => {
+    if (currentRoomId) {
+        socket.emit('update-text', {
+            roomId: currentRoomId,
+            content: editor.value
+        });
+    }
+});
+
+socket.on('text-synced', (content) => {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = content;
+    // Restore cursor position if focused to prevent it from jumping to the end
+    if (document.activeElement === editor) {
+        editor.setSelectionRange(start, end);
+    }
+});
+
+// Handle File Actions (Download & Delete)
+fileList.addEventListener('click', (e) => {
+    if (e.target.matches('.file-action-btn[data-action="download"]')) {
+        const fileItem = e.target.closest('.file-item');
+        const fileId = fileItem.dataset.fileId;
+        const fileToDownload = roomFiles.find(f => f.id === fileId);
+
+        if (fileToDownload) {
+            const blob = new Blob([fileToDownload.content], { type: fileToDownload.type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileToDownload.name;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    if (e.target.matches('.file-action-btn[data-action="delete"]')) {
+        const fileItem = e.target.closest('.file-item');
+        const fileId = fileItem.dataset.fileId;
+        if(confirm('Delete this file?')) {
+            socket.emit('delete-file', { roomId: currentRoomId, fileId });
+        }
+    }
+});
