@@ -26,3 +26,15 @@
     --nav-height: 60px;
     --sidebar-width: 280px;
 }
+
+[data-theme="light"] {
+    --primary-color: #4f46e5;
+    --primary-color-rgb: 79, 70, 229;
+    --primary-hover: #4338ca;
+    --bg-color: #f8fafc;
+    --surface-color: #ffffff;
+    --surface-hover: #f1f5f9;
+    --text-color: #0f172a;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+}

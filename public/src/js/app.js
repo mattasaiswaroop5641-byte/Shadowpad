@@ -24,6 +24,113 @@ const fileCountBadge = document.getElementById('file-count');
 let currentRoomId = null;
 let roomFiles = []; // Local cache for file content
 
+// --- Theme Initialization ---
+const savedTheme = localStorage.getItem('theme') || 'dark';
+document.documentElement.setAttribute('data-theme', savedTheme);
+
+// --- Inject Settings Modal ---
+function injectSettingsModal() {
+    const modalHtml = `
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="modal-close" id="close-settings">&times;</button>
+            </div>
+            <div class="input-group">
+                <div class="permission-item">
+                    <span>Light Mode</span>
+                    <label>
+                        <input type="checkbox" id="theme-toggle-switch">
+                        <span class="toggle"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const themeSwitch = document.getElementById('theme-toggle-switch');
+    const closeBtn = document.getElementById('close-settings');
+    const modal = document.getElementById('settings-modal');
+
+    // Set initial state
+    themeSwitch.checked = document.documentElement.getAttribute('data-theme') === 'light';
+
+    // Handle Toggle
+    themeSwitch.addEventListener('change', (e) => {
+        const next = e.target.checked ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+    });
+
+    // Handle Close
+    closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+    });
+}
+injectSettingsModal();
+
+// --- Password Visibility Toggle ---
+document.querySelectorAll('.toggle-password').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // The input is the sibling immediately before the button
+        const input = btn.previousElementSibling;
+        if (input && (input.type === 'password' || input.type === 'text')) {
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈'; // Hide icon
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️'; // Show icon
+            }
+        }
+    });
+});
+
+// --- Inject Toolbar Icons (Save, Copy, Clear) ---
+function setupToolbar() {
+    const toolbar = document.querySelector('.editor-toolbar');
+    if (!toolbar) return;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'nav-actions';
+    
+    const tools = [
+        { icon: '💾', title: 'Save as Text', action: () => {
+            const blob = new Blob([editor.value], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shadowpad-${currentRoomId || 'doc'}.txt`;
+            a.click();
+        }},
+        { icon: '🔗', title: 'Copy Room ID', action: () => {
+            navigator.clipboard.writeText(currentRoomId).then(() => alert('Room ID copied!'));
+        }},
+        { icon: '⚙️', title: 'Settings', action: () => {
+            document.getElementById('settings-modal').classList.add('active');
+        }},
+        { icon: '🧹', title: 'Clear Editor', action: () => {
+            if(confirm('Clear all text?')) { editor.value = ''; editor.dispatchEvent(new Event('input')); }
+        }}
+    ];
+
+    tools.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn';
+        btn.innerHTML = t.icon;
+        btn.title = t.title;
+        btn.onclick = t.action;
+        actionsDiv.appendChild(btn);
+    });
+    
+    // Insert before the existing permissions or append
+    toolbar.appendChild(actionsDiv);
+}
+setupToolbar();
+
 // Tab Switching Logic
 document.querySelectorAll('.tab-btn').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -105,7 +212,7 @@ function updateUserList(users) {
     });
     const count = users.length;
     userCountBadge.innerText = count;
-    userCounterText.innerText = `${count}/20`;
+    userCounterText.innerText = `${count}/60`;
 }
 
 socket.on('update-user-list', (users) => {
@@ -147,7 +254,7 @@ function handleFiles(files) {
         return;
     }
     for (const file of files) {
-        if (file.size > 25 * 1000 * 1000) { // 25MB limit (matches server config)
+        if (file.size > 25 * 1024 * 1024) { // 25MB limit (matches server config)
             alert(`File "${file.name}" is too large (max 25MB).`);
             continue;
         }

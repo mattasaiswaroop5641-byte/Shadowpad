@@ -6,7 +6,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 25e6 // Increased limit to 25MB
+    maxHttpBufferSize: 25 * 1024 * 1024 // Exact 25MB limit
 });
 
 app.use(express.static(path.join(__dirname, 'public')));

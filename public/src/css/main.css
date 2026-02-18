@@ -82,6 +82,7 @@ body {
     font-weight: 700;
     background: linear-gradient(135deg, #fff 0%, var(--primary-color) 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -151,7 +152,7 @@ body {
 }
 
 .editor-toolbar {
-    height: 50px;
+    height: 64px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
