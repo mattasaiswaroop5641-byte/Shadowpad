@@ -196,7 +196,8 @@ body {
     bottom: 10px;
     left: 0;
     width: 100%;
-    text-align: center;
+    text-align: left;
+    padding-left: 20px;
     color: var(--text-muted);
     font-size: 0.75rem;
     pointer-events: none;
