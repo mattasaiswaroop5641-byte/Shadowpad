@@ -190,3 +190,16 @@ body {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
+
+.app-footer {
+    position: fixed;
+    bottom: 10px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.7;
+}

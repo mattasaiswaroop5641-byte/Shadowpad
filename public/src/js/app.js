@@ -344,6 +344,12 @@ socket.on('update-permissions', (data) => {
     }
 });
 
+// --- Inject Footer ---
+const footer = document.createElement('div');
+footer.className = 'app-footer';
+footer.innerHTML = '&copy; M.G.Sai Swarup';
+document.body.appendChild(footer);
+
 permUpload.addEventListener('change', () => {
     if (currentRoomId) {
         socket.emit('update-permissions', { 
