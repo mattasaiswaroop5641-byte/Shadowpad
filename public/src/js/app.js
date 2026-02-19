@@ -171,6 +171,13 @@ function injectStyleSwitcher() {
                 </div>
                 <p class="form-hint">🔒 Data is locked with this password. Auto-deletes after 30 days.</p>
             </div>
+            <div class="input-group">
+                <label style="display:flex; justify-content:space-between;">
+                    <span>Max Users</span>
+                    <span id="pad-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
+                </label>
+                <input type="range" id="pad-max-users" min="2" max="60" value="20" style="width:100%; margin-top:8px;">
+            </div>
             <div class="pad-actions">
                 <button type="submit" class="btn btn-primary" title="Join existing note">Open Note</button>
                 <button type="button" class="btn" id="pad-create-btn" style="border:1px solid var(--border-color)" title="Create new note">Create New</button>
@@ -182,6 +189,11 @@ function injectStyleSwitcher() {
     // 3. Switcher Logic
     const styleBtns = document.querySelectorAll('.style-btn');
     const padForm = document.getElementById('pad-form');
+    
+    // Pad Slider Logic
+    const padSlider = document.getElementById('pad-max-users');
+    const padDisplay = document.getElementById('pad-max-users-val');
+    padSlider.addEventListener('input', (e) => padDisplay.textContent = e.target.value);
 
     styleBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -212,12 +224,45 @@ function injectStyleSwitcher() {
     document.getElementById('pad-create-btn').addEventListener('click', () => {
         if(padForm.checkValidity()) {
             isPadMode = true;
-            socket.emit('create-room', { roomName: document.getElementById('pad-name').value, password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+            socket.emit('create-room', { 
+                roomName: document.getElementById('pad-name').value, 
+                password: document.getElementById('pad-password').value, 
+                userName: 'Anonymous',
+                maxUsers: parseInt(document.getElementById('pad-max-users').value)
+            });
         }
         else padForm.reportValidity();
     });
 }
 injectStyleSwitcher();
+
+// Inject Slider into Room Creation Form
+function injectRoomSlider() {
+    const form = document.getElementById('create-form');
+    if (!form) return;
+    if (document.getElementById('room-max-users')) return;
+
+    const html = `
+        <div class="input-group">
+            <label style="display:flex; justify-content:space-between;">
+                <span>Max Users</span>
+                <span id="room-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
+            </label>
+            <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:8px;">
+        </div>
+    `;
+    
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.insertAdjacentHTML('beforebegin', html);
+    else form.insertAdjacentHTML('beforeend', html);
+
+    const slider = document.getElementById('room-max-users');
+    const display = document.getElementById('room-max-users-val');
+    if(slider && display) {
+        slider.addEventListener('input', (e) => display.textContent = e.target.value);
+    }
+}
+injectRoomSlider();
 
 // Handle Creating a Room
 createForm.addEventListener('submit', (e) => {
@@ -226,7 +271,8 @@ createForm.addEventListener('submit', (e) => {
     const roomName = document.getElementById('room-name').value;
     const userName = document.getElementById('owner-name').value;
     const password = document.getElementById('create-password').value;
-    socket.emit('create-room', { roomName, password, userName });
+    const maxUsers = document.getElementById('room-max-users') ? parseInt(document.getElementById('room-max-users').value) : 20;
+    socket.emit('create-room', { roomName, password, userName, maxUsers });
 });
 
 // Handle Joining a Room
@@ -436,6 +482,17 @@ if (uploadZone) {
     while (node = walker.nextNode()) {
         if (node.nodeValue.includes('10')) {
             node.nodeValue = node.nodeValue.replace('10', '25');
+        }
+    }
+}
+
+// --- Update Max Users Text (2-20 -> 2-60) ---
+if (authModule) {
+    const walker = document.createTreeWalker(authModule, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.nodeValue.includes('2-20')) {
+            node.nodeValue = node.nodeValue.replace('2-20', '2-60');
         }
     }
 }
