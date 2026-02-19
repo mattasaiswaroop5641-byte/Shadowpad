@@ -23,6 +23,7 @@ const fileCountBadge = document.getElementById('file-count');
 
 let currentRoomId = null;
 let roomFiles = []; // Local cache for file content
+let isPadMode = false;
 
 // --- Theme Initialization ---
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -204,11 +205,15 @@ function injectStyleSwitcher() {
     // 4. Pad Form Handlers
     padForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        isPadMode = true;
         socket.emit('join-room', { roomId: document.getElementById('pad-name').value.toUpperCase(), password: document.getElementById('pad-password').value, userName: 'Anonymous' });
     });
 
     document.getElementById('pad-create-btn').addEventListener('click', () => {
-        if(padForm.checkValidity()) socket.emit('create-room', { roomName: document.getElementById('pad-name').value, password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+        if(padForm.checkValidity()) {
+            isPadMode = true;
+            socket.emit('create-room', { roomName: document.getElementById('pad-name').value, password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+        }
         else padForm.reportValidity();
     });
 }
@@ -217,6 +222,7 @@ injectStyleSwitcher();
 // Handle Creating a Room
 createForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    isPadMode = false;
     const roomName = document.getElementById('room-name').value;
     const userName = document.getElementById('owner-name').value;
     const password = document.getElementById('create-password').value;
@@ -226,6 +232,7 @@ createForm.addEventListener('submit', (e) => {
 // Handle Joining a Room
 joinForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    isPadMode = false;
     const roomId = document.getElementById('join-room-id').value.toUpperCase();
     const userName = document.getElementById('join-name').value;
     const password = document.getElementById('join-password').value;
@@ -237,6 +244,13 @@ function enterRoom(id, name, content, users, isHost, files) {
     currentRoomId = id;
     authModule.classList.remove('active');
     appModule.classList.add('active');
+
+    if (isPadMode) {
+        document.body.classList.add('pad-mode');
+    } else {
+        document.body.classList.remove('pad-mode');
+    }
+
     roomNameDisplay.innerText = name;
     roomIdDisplay.innerText = id;
     editor.value = content;

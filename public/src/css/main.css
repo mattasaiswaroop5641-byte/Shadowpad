@@ -246,3 +246,12 @@ body {
     color: var(--text-muted);
     margin-top: 6px;
 }
+
+/* Pad Mode (No Sidebars) */
+body.pad-mode .sidebar {
+    display: none !important;
+}
+
+body.pad-mode .workspace {
+    grid-template-columns: 1fr !important;
+}
