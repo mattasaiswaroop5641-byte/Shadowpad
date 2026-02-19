@@ -429,11 +429,16 @@ socket.on('update-permissions', (data) => {
     }
 });
 
-// --- Inject Footer ---
-const footer = document.createElement('div');
-footer.className = 'app-footer';
-footer.innerHTML = '&copy; M.G.Sai Swarup';
-document.body.appendChild(footer);
+// --- Update Upload Zone Text (10MB -> 25MB) ---
+if (uploadZone) {
+    const walker = document.createTreeWalker(uploadZone, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.nodeValue.includes('10')) {
+            node.nodeValue = node.nodeValue.replace('10', '25');
+        }
+    }
+}
 
 permUpload.addEventListener('change', () => {
     if (currentRoomId) {
