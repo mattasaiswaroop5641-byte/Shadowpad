@@ -73,20 +73,18 @@ function injectSettingsModal() {
 injectSettingsModal();
 
 // --- Password Visibility Toggle ---
-document.querySelectorAll('.toggle-password').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        // The input is the sibling immediately before the button
+// Use event delegation to handle existing and dynamically injected forms
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('toggle-password')) {
+        e.preventDefault();
+        const btn = e.target;
         const input = btn.previousElementSibling;
         if (input && (input.type === 'password' || input.type === 'text')) {
-            if (input.type === 'password') {
-                input.type = 'text';
-                btn.textContent = '🙈'; // Hide icon
-            } else {
-                input.type = 'password';
-                btn.textContent = '👁️'; // Show icon
-            }
+            const isPass = input.type === 'password';
+            input.type = isPass ? 'text' : 'password';
+            btn.textContent = isPass ? '🙈' : '👁️';
         }
-    });
+    }
 });
 
 // --- Inject Toolbar Icons (Save, Copy, Clear) ---
@@ -142,6 +140,79 @@ document.querySelectorAll('.tab-btn').forEach(tab => {
         if (targetForm) targetForm.classList.add('active');
     });
 });
+
+// --- Inject Style Switcher (Room vs Pad) ---
+function injectStyleSwitcher() {
+    const authCard = document.querySelector('.auth-card');
+    const authTabs = document.querySelector('.auth-tabs');
+    
+    // 1. Inject Switcher UI
+    const switcherHtml = `
+        <div class="style-switcher">
+            <button class="style-btn active" data-style="room">👥 Room Style</button>
+            <button class="style-btn" data-style="pad">📝 Pad Style</button>
+        </div>
+    `;
+    authCard.insertAdjacentHTML('afterbegin', switcherHtml);
+
+    // 2. Inject Pad Mode Form
+    const padFormHtml = `
+        <form id="pad-form" class="auth-form">
+            <div class="input-group">
+                <label>Note Name / Room ID</label>
+                <input type="text" id="pad-name" placeholder="e.g. my-secret-note" required>
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <div class="password-wrapper">
+                    <input type="password" id="pad-password" placeholder="Enter password" required>
+                    <button type="button" class="toggle-password">👁️</button>
+                </div>
+                <p class="form-hint">🔒 Data is locked with this password. Auto-deletes after 30 days.</p>
+            </div>
+            <div class="pad-actions">
+                <button type="submit" class="btn btn-primary" title="Join existing note">Open Note</button>
+                <button type="button" class="btn" id="pad-create-btn" style="border:1px solid var(--border-color)" title="Create new note">Create New</button>
+            </div>
+        </form>
+    `;
+    authCard.insertAdjacentHTML('beforeend', padFormHtml);
+
+    // 3. Switcher Logic
+    const styleBtns = document.querySelectorAll('.style-btn');
+    const padForm = document.getElementById('pad-form');
+
+    styleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const style = btn.dataset.style;
+            styleBtns.forEach(b => b.classList.toggle('active', b === btn));
+            
+            if (style === 'room') {
+                padForm.classList.remove('active');
+                authTabs.style.display = 'flex';
+                document.querySelector('.tab-btn.active').click(); // Restore active tab view
+            } else {
+                padForm.classList.add('active');
+                authTabs.style.display = 'none';
+                document.querySelectorAll('.auth-form').forEach(f => {
+                    if(f.id !== 'pad-form') f.classList.remove('active');
+                });
+            }
+        });
+    });
+
+    // 4. Pad Form Handlers
+    padForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        socket.emit('join-room', { roomId: document.getElementById('pad-name').value.toUpperCase(), password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+    });
+
+    document.getElementById('pad-create-btn').addEventListener('click', () => {
+        if(padForm.checkValidity()) socket.emit('create-room', { roomName: document.getElementById('pad-name').value, password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+        else padForm.reportValidity();
+    });
+}
+injectStyleSwitcher();
 
 // Handle Creating a Room
 createForm.addEventListener('submit', (e) => {
