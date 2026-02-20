@@ -257,7 +257,6 @@ function injectStyleSwitcher() {
                     <input type="password" id="pad-password" placeholder="Enter password" required>
                     <button type="button" class="toggle-password">👁️</button>
                 </div>
-                <p class="form-hint" style="color:#fbbf24;">⚠️ Encrypted & Saved to MongoDB. Password is the only key.</p>
             </div>
             <div class="input-group">
                 <label style="display:flex; justify-content:space-between;">
