@@ -181,6 +181,14 @@ app.delete('/api/drop-database', async (req, res) => {
 
         await mongoose.connection.db.dropDatabase();
         console.log('💥 Database dropped successfully.');
+        
+        // Clear in-memory rooms and disconnect all users for a full reset
+        Object.keys(rooms).forEach(key => delete rooms[key]);
+        io.sockets.sockets.forEach((socket) => {
+            socket.emit('error-msg', 'System Reset: Database dropped by admin.');
+            socket.disconnect(true);
+        });
+
         res.json({ success: true, message: 'Current database dropped. All data is gone.' });
     } catch (error) {
         res.status(500).json({ error: 'Drop failed' });
@@ -207,7 +215,7 @@ app.post('/api/kick-user', (req, res) => {
 
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
-        socket.emit('error-msg', 'You have been kicked by the admin.');
+        socket.emit('kicked');
         socket.disconnect(true);
         res.json({ success: true, message: 'User kicked' });
     } else {
@@ -280,9 +288,27 @@ io.on('connection', (socket) => {
 
     // Sync Text
     socket.on('update-text', ({ roomId, content }) => {
-        if (rooms[roomId]) {
-            rooms[roomId].content = content;
+        const room = rooms[roomId];
+        if (room) {
+            const isHost = socket.id === room.hostId;
+            // Explicitly check if permission is false (strict check)
+            if (!isHost && room.permissions.allowEdit === false) {
+                return;
+            }
+            room.content = content;
             socket.to(roomId).emit('text-synced', content);
+        }
+    });
+
+    // Handle Typing Indicator
+    socket.on('typing', ({ roomId, isTyping }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const isHost = socket.id === room.hostId;
+            if (!isHost && room.permissions.allowEdit === false) {
+                return;
+            }
+            socket.to(roomId).emit('user-typing', { userId: socket.id, isTyping });
         }
     });
 
@@ -300,23 +326,90 @@ io.on('connection', (socket) => {
             content: room.content,
             users: room.users,
             isHost: user.isHost,
-            files: room.files
+            files: room.files,
+            permissions: room.permissions
         });
         
         io.to(roomId).emit('update-user-list', room.users);
         io.to(roomId).emit('activity-log', `${userName} joined.`);
     }
 
+    // Handle Permissions Update
+    socket.on('update-permissions', ({ roomId, allowEdit, allowUpload, allowDelete }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            if (allowEdit !== undefined) room.permissions.allowEdit = !!allowEdit;
+            if (allowUpload !== undefined) room.permissions.allowUpload = !!allowUpload;
+            if (allowDelete !== undefined) room.permissions.allowDelete = !!allowDelete;
+            io.to(roomId).emit('update-permissions', room.permissions);
+        }
+    });
+
+    // Handle Host Promotion
+    socket.on('promote-host', ({ roomId, userId }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            const targetUser = room.users.find(u => u.id === userId);
+            if (targetUser) {
+                room.hostId = userId;
+                room.users.forEach(u => u.isHost = (u.id === userId));
+                
+                io.to(roomId).emit('update-user-list', room.users);
+                io.to(userId).emit('you-are-host');
+                io.to(roomId).emit('activity-log', `${targetUser.name} is now the host.`);
+                
+                // Refresh permissions for everyone (new host gets controls, old host loses them)
+                io.to(roomId).emit('update-permissions', room.permissions);
+            }
+        }
+    });
+
+    // Handle File Upload
+    socket.on('upload-file', ({ roomId, file }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const isHost = socket.id === room.hostId;
+            if (!isHost && room.permissions.allowUpload === false) {
+                return socket.emit('error-msg', 'Uploads disabled by host');
+            }
+            file.id = Date.now().toString();
+            room.files.push(file);
+            io.to(roomId).emit('update-file-list', room.files);
+            io.to(roomId).emit('activity-log', `File uploaded: ${file.name}`);
+        }
+    });
+
+    // Handle File Delete
+    socket.on('delete-file', ({ roomId, fileId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const isHost = socket.id === room.hostId;
+            if (!isHost && room.permissions.allowDelete === false) {
+                return socket.emit('error-msg', 'Deleting files disabled by host');
+            }
+            room.files = room.files.filter(f => f.id !== fileId);
+            io.to(roomId).emit('update-file-list', room.files);
+        }
+    });
+
     // Handle Disconnect
     socket.on('disconnect', () => {
         Object.keys(rooms).forEach(roomId => {
             const room = rooms[roomId];
+            if (!room) return;
+
             const index = room.users.findIndex(u => u.id === socket.id);
             if (index !== -1) {
                 const user = room.users[index];
                 room.users.splice(index, 1);
-                io.to(roomId).emit('update-user-list', room.users);
-                io.to(roomId).emit('activity-log', `${user.name} left.`);
+
+                if (room.users.length === 0) {
+                    delete rooms[roomId];
+                    console.log(`Room ${roomId} deleted from memory (empty).`);
+                } else {
+                    io.to(roomId).emit('update-user-list', room.users);
+                    io.to(roomId).emit('activity-log', `${user.name} left.`);
+                }
             }
         });
     });

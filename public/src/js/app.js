@@ -33,11 +33,14 @@ const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
 const fileList = document.getElementById('file-list');
 const fileCountBadge = document.getElementById('file-count');
+const charCountDisplay = document.getElementById('char-count');
+const wordCountDisplay = document.getElementById('word-count');
 
 let currentRoomId = null;
 let roomFiles = []; // Local cache for file content
 let isPadMode = false;
 let roomPassword = ''; // Store password for encryption
+let typingTimeout;
 
 // --- Theme Initialization ---
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -111,7 +114,7 @@ function setupToolbar() {
     actionsDiv.className = 'nav-actions';
     
     const tools = [
-        { icon: '💾', title: 'Save as Text', action: () => {
+        { icon: '📥', title: 'Download as Text', action: () => {
             const blob = new Blob([editor.value], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -347,7 +350,45 @@ joinForm.addEventListener('submit', (e) => {
 });
 
 // UI Transition Logic
-function enterRoom(id, name, content, users, isHost, files) {
+function applyPermissions(data) {
+    // Update checkbox state visually
+    if (data.allowEdit !== undefined) permEdit.checked = data.allowEdit;
+    if (data.allowUpload !== undefined) permUpload.checked = data.allowUpload;
+    if (data.allowDelete !== undefined) permDelete.checked = data.allowDelete;
+    
+    const isHost = document.body.classList.contains('is-host');
+    
+    // Disable/Enable permission controls based on role
+    permEdit.disabled = !isHost;
+    permUpload.disabled = !isHost;
+    permDelete.disabled = !isHost;
+
+    // If I am not the host, enforce the permission on editor/files
+    if (!isHost) {
+        editor.disabled = !data.allowEdit;
+        editor.placeholder = data.allowEdit ? "Start typing..." : "Editing disabled by host.";
+        
+        if (data.allowUpload) {
+            uploadZone.classList.remove('disabled');
+        } else {
+            uploadZone.classList.add('disabled');
+        }
+
+        if (data.allowDelete) {
+            fileList.classList.remove('delete-disabled');
+        } else {
+            fileList.classList.add('delete-disabled');
+        }
+    } else {
+        // Host always has access
+        editor.disabled = false;
+        editor.placeholder = "Start typing...";
+        uploadZone.classList.remove('disabled');
+        fileList.classList.remove('delete-disabled');
+    }
+}
+
+function enterRoom(id, name, content, users, isHost, files, permissions) {
     currentRoomId = id;
     authModule.classList.remove('active');
     appModule.classList.add('active');
@@ -386,6 +427,7 @@ function enterRoom(id, name, content, users, isHost, files) {
     roomNameDisplay.innerText = name;
     roomIdDisplay.innerText = id;
     editor.value = content;
+    updateCounts();
     
     // Handle Host Permissions
     if (isHost) {
@@ -396,11 +438,21 @@ function enterRoom(id, name, content, users, isHost, files) {
     
     updateUserList(users);
     updateFileList(files);
+
+    if (permissions) {
+        applyPermissions(permissions);
+    } else {
+        applyPermissions({ allowEdit: true, allowUpload: true, allowDelete: true });
+    }
 }
 
-socket.on('room-created', (data) => enterRoom(data.roomId, data.roomName, "", data.users, data.isHost, data.files));
-socket.on('joined-successfully', (data) => enterRoom(data.roomId, data.roomName, data.content, data.users, data.isHost, data.files));
+socket.on('room-created', (data) => enterRoom(data.roomId, data.roomName, "", data.users, data.isHost, data.files, data.permissions));
+socket.on('joined-successfully', (data) => enterRoom(data.roomId, data.roomName, data.content, data.users, data.isHost, data.files, data.permissions));
 socket.on('error-msg', (msg) => alert(msg));
+socket.on('kicked', () => {
+    alert('You have been kicked by the admin.');
+    window.location.reload();
+});
 
 // Handle Host Migration
 socket.on('you-are-host', () => {
@@ -411,19 +463,35 @@ socket.on('you-are-host', () => {
 // Handle User List Updates
 function updateUserList(users) {
     userList.innerHTML = ''; // Clear current list
+    
+    // Check if I am the host based on the updated list
+    const me = users.find(u => u.id === socket.id);
+    const isMeHost = me ? me.isHost : false;
+
+    // Sync UI state
+    if (isMeHost) document.body.classList.add('is-host');
+    else document.body.classList.remove('is-host');
+
     users.forEach(user => {
         const userInitial = user.name.charAt(0).toUpperCase();
         const li = document.createElement('li');
         li.className = 'user-item';
+        li.dataset.userId = user.id;
         
         const hostBadge = user.isHost ? '<span class="user-tag host" title="Host">👑</span>' : '';
         const youBadge = user.id === socket.id ? '<span class="user-tag">(You)</span>' : '';
+        
+        // Add Make Host button if I am host and this user is not me
+        const promoteBtn = (isMeHost && !user.isHost) 
+            ? `<button class="user-action-btn promote-btn" data-id="${user.id}" title="Make Host" style="background:none;border:none;cursor:pointer;margin-left:auto;">⬆️</button>` 
+            : '';
         
         li.innerHTML = `
             <div class="user-avatar">${userInitial}</div>
             <span class="user-name">${user.name}</span>
             ${hostBadge}
             ${youBadge}
+            ${promoteBtn}
         `;
         userList.appendChild(li);
     });
@@ -431,6 +499,17 @@ function updateUserList(users) {
     userCountBadge.innerText = count;
     userCounterText.innerText = `${count}/60`;
 }
+
+// Handle Make Host Clicks
+userList.addEventListener('click', (e) => {
+    if (e.target.closest('.promote-btn')) {
+        const btn = e.target.closest('.promote-btn');
+        const userId = btn.dataset.id;
+        if (confirm('Make this user the host? They will gain full control.')) {
+            socket.emit('promote-host', { roomId: currentRoomId, userId });
+        }
+    }
+});
 
 socket.on('update-user-list', (users) => {
     updateUserList(users);
@@ -536,29 +615,7 @@ permEdit.addEventListener('change', () => {
 });
 
 socket.on('update-permissions', (data) => {
-    // Update checkbox state visually for everyone (though only host can click it)
-    permEdit.checked = data.allowEdit;
-    if (data.allowUpload !== undefined) permUpload.checked = data.allowUpload;
-    if (data.allowDelete !== undefined) permDelete.checked = data.allowDelete;
-    
-    // If I am not the host, enforce the permission
-    if (!document.body.classList.contains('is-host')) {
-        editor.disabled = !data.allowEdit;
-        editor.placeholder = data.allowEdit ? "Start typing..." : "Editing disabled by host.";
-        
-        if (data.allowUpload) {
-            uploadZone.classList.remove('disabled');
-        } else {
-            uploadZone.classList.add('disabled');
-        }
-
-        // Toggle delete buttons visibility based on permission
-        if (data.allowDelete) {
-            fileList.classList.remove('delete-disabled');
-        } else {
-            fileList.classList.add('delete-disabled');
-        }
-    }
+    applyPermissions(data);
 });
 
 // --- Update Upload Zone Text (10MB -> 25MB) ---
@@ -603,11 +660,19 @@ permDelete.addEventListener('change', () => {
 
 // Real-time Text Syncing
 editor.addEventListener('input', () => {
+    updateCounts();
     if (currentRoomId) {
         socket.emit('update-text', {
             roomId: currentRoomId,
             content: editor.value
         });
+
+        // Typing Indicator
+        socket.emit('typing', { roomId: currentRoomId, isTyping: true });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('typing', { roomId: currentRoomId, isTyping: false });
+        }, 1000);
     }
 });
 
@@ -615,6 +680,7 @@ socket.on('text-synced', (content) => {
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
     editor.value = content;
+    updateCounts();
     // Restore cursor position if focused to prevent it from jumping to the end
     if (document.activeElement === editor) {
         editor.setSelectionRange(start, end);
@@ -644,6 +710,83 @@ fileList.addEventListener('click', (e) => {
         const fileId = fileItem.dataset.fileId;
         if(confirm('Delete this file?')) {
             socket.emit('delete-file', { roomId: currentRoomId, fileId });
+        }
+    }
+});
+
+// --- Toolbar Functionality (Bold, Italic, Code, etc.) ---
+const editorToolbar = document.querySelector('.editor-toolbar');
+if (editorToolbar) {
+    editorToolbar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tool-btn');
+        if (!btn) return;
+        
+        const action = btn.dataset.action;
+        if (!action) return;
+
+        if (action === 'bold') insertFormatting('**', '**');
+        if (action === 'italic') insertFormatting('*', '*');
+        if (action === 'code') insertFormatting('`', '`');
+        
+        if (action === 'download') {
+            const blob = new Blob([editor.value], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shadowpad-${currentRoomId || 'note'}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        if (action === 'clear') {
+            if (confirm('Are you sure you want to clear the editor?')) {
+                editor.value = '';
+                editor.dispatchEvent(new Event('input'));
+            }
+        }
+    });
+}
+
+function insertFormatting(prefix, suffix) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const text = editor.value;
+    const selection = text.substring(start, end);
+    const newText = text.substring(0, start) + prefix + selection + suffix + text.substring(end);
+    
+    editor.value = newText;
+    editor.focus();
+    editor.setSelectionRange(start + prefix.length, end + prefix.length);
+    
+    // Trigger sync
+    editor.dispatchEvent(new Event('input'));
+}
+
+function updateCounts() {
+    const text = editor.value || '';
+    const charCount = text.length;
+    const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+    
+    if(charCountDisplay) charCountDisplay.textContent = `${charCount} chars`;
+    if(wordCountDisplay) wordCountDisplay.textContent = `${wordCount} words`;
+}
+
+socket.on('user-typing', ({ userId, isTyping }) => {
+    const userLi = document.querySelector(`li[data-user-id="${userId}"]`);
+    if (userLi) {
+        const nameSpan = userLi.querySelector('.user-name');
+        if (nameSpan) {
+            if (isTyping) {
+                if (!nameSpan.querySelector('.typing-indicator')) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'typing-indicator';
+                    indicator.textContent = ' (typing...)';
+                    nameSpan.appendChild(indicator);
+                }
+            } else {
+                const indicator = nameSpan.querySelector('.typing-indicator');
+                if (indicator) indicator.remove();
+            }
         }
     }
 });

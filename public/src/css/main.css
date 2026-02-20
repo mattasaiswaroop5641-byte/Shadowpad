@@ -215,6 +215,56 @@ input[type=range]::-webkit-slider-thumb {
     align-items: center;
 }
 
+/* Room Info Styling (Bigger & Clearer) */
+.info-card {
+    background: rgba(0,0,0,0.2);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-top: 8px;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.info-row:last-child { margin-bottom: 0; }
+
+.info-label {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+#room-id-display {
+    font-size: 1.3rem; /* Much Bigger ID */
+    font-weight: 800;
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.1);
+    padding: 6px 10px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+}
+
+.copy-btn {
+    font-size: 1.4rem; /* Bigger Clipboard Icon */
+    padding: 4px;
+    background: transparent; border: none; cursor: pointer; color: var(--text-muted); transition: color 0.2s;
+}
+.copy-btn:hover { color: #fff; transform: scale(1.1); }
+
+.secure-badge {
+    font-size: 0.95rem; /* Bigger Badge */
+    padding: 6px 12px;
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 6px;
+    font-weight: 700;
+}
+
 /* Editor Area */
 .editor-container {
     display: flex;
@@ -231,6 +281,28 @@ input[type=range]::-webkit-slider-thumb {
     justify-content: space-between;
     padding: 0 var(--space-lg);
 }
+
+/* Toolbar Buttons (Bigger & Useful) */
+.toolbar-group {
+    display: flex;
+    gap: 8px;
+    margin-right: 16px;
+}
+
+.tool-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 1.3rem; /* Bigger Icons */
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 44px;
+    height: 44px;
+    display: flex; align-items: center; justify-content: center;
+}
+.tool-btn:hover { background: rgba(255,255,255,0.1); border-color: #6366f1; color: #6366f1; }
 
 .editor-wrapper {
     flex: 1;
@@ -355,3 +427,12 @@ body.pad-mode .editor-container {
     margin-bottom: 1rem;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.typing-indicator {
+    font-size: 0.75rem;
+    color: #4ade80;
+    margin-left: 6px;
+    font-style: italic;
+    animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
