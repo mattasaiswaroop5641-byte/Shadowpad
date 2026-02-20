@@ -18,9 +18,16 @@ let isDbConnected = false; // Track DB connection status
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Admin:Mgsai1042@cluster0.iygxgom.mongodb.net/shadowpad?appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
-    .then(() => {
+    .then(async () => {
         console.log('✅ MongoDB Connected');
         isDbConnected = true;
+        
+        // DEBUG: Print Database Stats on Startup
+        console.log(`📂 Connected to Database: "${mongoose.connection.name}"`);
+        try {
+            const count = await Pad.countDocuments();
+            console.log(`📊 Found ${count} pads in the collection.`);
+        } catch (e) { console.error("Error counting pads:", e); }
     })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.codeName || err.message);
@@ -110,10 +117,43 @@ app.get('/api/pads', async (req, res) => {
         if (req.query.secret !== 'Mgsai1042') {
             return res.status(403).json({ error: 'Unauthorized access' });
         }
-        const pads = await Pad.find().sort({ lastActive: -1 });
+        
+        // Optimization: Use Aggregation to get size without fetching full content
+        // This prevents the browser from crashing if you have 100MB+ of data
+        const pads = await Pad.aggregate([
+            { 
+                $project: { 
+                    roomId: { $ifNull: ["$roomId", "UNKNOWN_ID"] }, 
+                    lastActive: { $ifNull: ["$lastActive", new Date(0)] }, 
+                    size: { $cond: [{ $ifNull: ["$content", false] }, { $strLenCP: "$content" }, 0] } 
+                } 
+            },
+            { $sort: { lastActive: -1 } }
+        ]);
         res.json(pads);
     } catch (error) {
         res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// 4.2.1 API Route: Bulk Cleanup (Delete Old Pads)
+app.delete('/api/cleanup-pads', async (req, res) => {
+    try {
+        if (!isDbConnected) return res.status(503).json({ error: 'No DB' });
+        
+        const { secret, days } = req.body;
+        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+        
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - (days || 30)); // Default to 30 days
+        
+        const result = await Pad.deleteMany({ lastActive: { $lt: cutoff } });
+        console.log(`🧹 Cleaned up ${result.deletedCount} old pads.`);
+        
+        res.json({ success: true, count: result.deletedCount, message: `Deleted ${result.deletedCount} pads older than ${days || 30} days.` });
+    } catch (error) {
+        console.error('Cleanup failed:', error);
+        res.status(500).json({ error: 'Cleanup failed' });
     }
 });
 

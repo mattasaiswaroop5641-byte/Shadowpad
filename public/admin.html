@@ -40,6 +40,15 @@
         .btn-primary:hover { background: #818cf8; }
         #dashboard-view { display: none; }
         .error-msg { color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none; }
+
+        /* Stats Bar */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: rgba(15, 23, 42, 0.6); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .stat-label { color: #94a3b8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: block; }
+        .stat-value { font-size: 2rem; font-weight: 800; color: white; }
+        .stat-value.green { color: #34d399; }
+        .stat-value.blue { color: #60a5fa; }
+        .stat-value.orange { color: #fbbf24; }
     </style>
 </head>
 <body>
@@ -59,9 +68,21 @@
     <div id="dashboard-view" class="admin-container">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h1>🛡️ ShadowPad Admin</h1>
+            <button id="cleanup-btn" class="btn-danger" style="background: rgba(234, 179, 8, 0.1); color: #facc15; border-color: rgba(234, 179, 8, 0.2); margin-right: 10px;">🧹 Clean Old Data</button>
             <button id="logout-btn" class="btn-danger">Logout</button>
         </div>
-        <p>Manage encrypted MongoDB records.</p>
+        
+        <!-- Stats Dashboard -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Total Pads</span>
+                <span id="total-pads" class="stat-value blue">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Total Storage</span>
+                <span id="total-size" class="stat-value orange">0 MB</span>
+            </div>
+        </div>
 
         <table>
             <thead>
@@ -123,6 +144,20 @@
             document.getElementById('active-view').style.display = 'none';
         });
 
+        document.getElementById('cleanup-btn').addEventListener('click', async () => {
+            const days = prompt("Delete pads inactive for how many days?", "30");
+            if (!days) return;
+            
+            const res = await fetch('/api/cleanup-pads', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ secret: currentSecret, days: parseInt(days) })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadPads();
+        });
+
         async function loadPads(secret = currentSecret) {
             const tbody = document.getElementById('pad-list');
             try {
@@ -139,13 +174,19 @@
                     return;
                 }
 
+                // Update Stats
+                document.getElementById('total-pads').textContent = pads.length;
+                const totalBytes = pads.reduce((acc, pad) => acc + (pad.size || 0), 0);
+                const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+                document.getElementById('total-size').textContent = `${totalMB} MB`;
+
                 tbody.innerHTML = pads.map(pad => `
                     <tr>
                         <td><span class="badge">${pad.roomId}</span></td>
                         <td>${new Date(pad.lastActive).toLocaleString()}</td>
-                        <td>${(pad.content || '').length} chars</td>
+                        <td>${pad.size} chars</td>
                         <td>
-                            <button class="btn-danger" onclick="deletePad('${pad.roomId}')">Delete</button>
+                            <button class="btn-danger" onclick="deletePad('${pad.roomId.replace(/'/g, "\\'")}')">Delete</button>
                         </td>
                     </tr>
                 `).join('');
