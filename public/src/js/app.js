@@ -474,10 +474,8 @@ function updateUserList(users) {
     else document.body.classList.remove('is-host');
 
     // Enforce local permissions based on "me"
-    if (me && !isMeHost) {
+    if (me) {
         applyPermissions(me.permissions);
-    } else if (isMeHost) {
-        applyPermissions({ allowEdit: true, allowUpload: true, allowDelete: true });
     }
 
     users.forEach(user => {
@@ -493,6 +491,10 @@ function updateUserList(users) {
         // Also add Permission Toggles
         const promoteBtn = (isMeHost && !user.isHost) 
             ? `<button class="user-action-btn promote-btn" data-id="${user.id}" title="Make Host">⬆️</button>` 
+            : '';
+        
+        const kickBtn = (isMeHost && !user.isHost)
+            ? `<button class="user-action-btn kick-btn" data-id="${user.id}" title="Kick User">🚫</button>`
             : '';
         
         let permControls = '';
@@ -515,6 +517,7 @@ function updateUserList(users) {
             <div class="user-actions-row">
                 ${permControls}
                 ${promoteBtn}
+                ${kickBtn}
             </div>
         `;
         userList.appendChild(li);
@@ -531,6 +534,14 @@ userList.addEventListener('click', (e) => {
         const userId = btn.dataset.id;
         if (confirm('Make this user the host? They will gain full control.')) {
             socket.emit('promote-host', { roomId: currentRoomId, userId });
+        }
+    }
+
+    if (e.target.closest('.kick-btn')) {
+        const btn = e.target.closest('.kick-btn');
+        const userId = btn.dataset.id;
+        if (confirm('Kick this user from the room?')) {
+            socket.emit('host-kick-user', { roomId: currentRoomId, userId });
         }
     }
 

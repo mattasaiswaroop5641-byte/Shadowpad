@@ -397,6 +397,18 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle Host Kick User
+    socket.on('host-kick-user', ({ roomId, userId }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            const targetSocket = io.sockets.sockets.get(userId);
+            if (targetSocket) {
+                targetSocket.emit('kicked');
+                targetSocket.disconnect(true);
+            }
+        }
+    });
+
     // Handle File Upload
     socket.on('upload-file', ({ roomId, file }) => {
         const room = rooms[roomId];

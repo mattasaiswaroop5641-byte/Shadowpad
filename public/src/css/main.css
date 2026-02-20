@@ -459,3 +459,9 @@ body.pad-mode .editor-container {
     font-size: 1.5rem; /* Bigger Host Button */
     background: none; border: none; cursor: pointer; padding: 0 4px;
 }
+.kick-btn {
+    font-size: 1.2rem;
+    background: none; border: none; cursor: pointer; padding: 0 4px;
+    color: #ef4444;
+}
+.kick-btn:hover { transform: scale(1.1); }
