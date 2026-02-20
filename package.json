@@ -2,6 +2,8 @@
   "name": "shadowpad",
   "version": "1.0.0",
   "description": "Secure Collaborative Workspace",
+  "private": true,
+  "license": "UNLICENSED",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
