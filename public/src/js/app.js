@@ -30,6 +30,7 @@ const shareBtn = document.getElementById('share-btn');
 const permEdit = document.getElementById('perm-edit');
 const permUpload = document.getElementById('perm-upload');
 const permDelete = document.getElementById('perm-delete');
+const grantAllBtn = document.getElementById('grant-all-btn');
 const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
 const fileList = document.getElementById('file-list');
@@ -42,16 +43,6 @@ let roomFiles = []; // Local cache for file content
 let isPadMode = false;
 let roomPassword = ''; // Store password for encryption
 let typingTimeout;
-
-// Check for Room ID in URL on load
-const urlParams = new URLSearchParams(window.location.search);
-const roomParam = urlParams.get('room');
-if (roomParam) {
-    const joinTab = document.querySelector('[data-tab="join"]');
-    if (joinTab) joinTab.click();
-    const joinInput = document.getElementById('join-room-id');
-    if (joinInput) joinInput.value = roomParam;
-}
 
 // --- Theme Initialization ---
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -356,15 +347,19 @@ function injectStyleSwitcher() {
         e.preventDefault();
         isPadMode = true;
         roomPassword = document.getElementById('pad-password').value;
-        socket.emit('join-room', { roomId: document.getElementById('pad-name').value.toUpperCase(), password: roomPassword, userName: 'Anonymous' });
+        let rawId = document.getElementById('pad-name').value.toUpperCase();
+        if (!rawId.startsWith('NOTE:')) rawId = 'NOTE:' + rawId;
+        socket.emit('join-room', { roomId: rawId, password: roomPassword, userName: 'Anonymous' });
     });
 
     document.getElementById('pad-create-btn').addEventListener('click', () => {
         if(padForm.checkValidity()) {
             isPadMode = true;
             roomPassword = document.getElementById('pad-password').value;
+            let rawName = document.getElementById('pad-name').value;
+            if (!rawName.toUpperCase().startsWith('NOTE:')) rawName = 'NOTE:' + rawName;
             socket.emit('create-room', { 
-                roomName: document.getElementById('pad-name').value, 
+                roomName: rawName, 
                 password: roomPassword, 
                 userName: 'Anonymous',
                 maxUsers: parseInt(document.getElementById('pad-max-users').value),
@@ -376,11 +371,38 @@ function injectStyleSwitcher() {
 }
 injectStyleSwitcher();
 
+// Check for Room ID in URL on load (After switcher is injected)
+const urlParams = new URLSearchParams(window.location.search);
+const roomParam = urlParams.get('room');
+if (roomParam) {
+    if (roomParam.startsWith('NOTE:')) {
+        // Switch to Notepad
+        const padBtn = document.querySelector('.style-btn[data-style="pad"]');
+        if (padBtn) padBtn.click();
+        const padInput = document.getElementById('pad-name');
+        if (padInput) padInput.value = roomParam.replace(/^NOTE:/, '');
+    } else {
+        // Switch to Room
+        const roomBtn = document.querySelector('.style-btn[data-style="room"]');
+        if (roomBtn) roomBtn.click();
+        
+        const joinTab = document.querySelector('[data-tab="join"]');
+        if (joinTab) joinTab.click();
+        
+        const joinInput = document.getElementById('join-room-id');
+        // Handle legacy links or explicit ROOM: links
+        const cleanId = roomParam.replace(/^ROOM:/, '');
+        if (joinInput) joinInput.value = cleanId;
+    }
+}
+
 // Handle Creating a Room
 createForm.addEventListener('submit', (e) => {
     e.preventDefault();
     isPadMode = false;
-    const roomName = document.getElementById('room-name').value;
+    let roomName = document.getElementById('room-name').value;
+    if (!roomName.toUpperCase().startsWith('ROOM:')) roomName = 'ROOM:' + roomName;
+    
     const userName = document.getElementById('owner-name').value;
     const password = roomPassword = document.getElementById('create-password').value;
     const maxUsers = document.getElementById('room-max-users') ? parseInt(document.getElementById('room-max-users').value) : 20;
@@ -391,7 +413,9 @@ createForm.addEventListener('submit', (e) => {
 joinForm.addEventListener('submit', (e) => {
     e.preventDefault();
     isPadMode = false;
-    const roomId = document.getElementById('join-room-id').value.toUpperCase();
+    let roomId = document.getElementById('join-room-id').value.toUpperCase();
+    if (!roomId.startsWith('ROOM:')) roomId = 'ROOM:' + roomId;
+    
     const userName = document.getElementById('join-name').value;
     const password = roomPassword = document.getElementById('join-password').value;
     socket.emit('join-room', { roomId, password, userName });
@@ -410,6 +434,7 @@ function applyPermissions(data) {
     permEdit.disabled = !isHost;
     permUpload.disabled = !isHost;
     permDelete.disabled = !isHost;
+    if (grantAllBtn) grantAllBtn.disabled = !isHost;
 
     // If I am not the host, enforce the permission on editor/files
     if (!isHost) {
@@ -477,8 +502,13 @@ function enterRoom(id, name, content, users, isHost, files, permissions) {
         document.getElementById('delete-pad-btn').style.display = 'none';
     }
 
-    roomNameDisplay.innerText = name;
-    roomIdDisplay.innerText = id;
+    // Strip prefixes for display
+    let displayId = id;
+    if (displayId.startsWith('ROOM:')) displayId = displayId.substring(5);
+    if (displayId.startsWith('NOTE:')) displayId = displayId.substring(5);
+
+    roomNameDisplay.innerText = name.replace(/^(ROOM:|NOTE:)/, '');
+    roomIdDisplay.innerText = displayId;
     editor.value = content;
     updateCounts();
     
@@ -766,6 +796,19 @@ permDelete.addEventListener('change', () => {
         });
     }
 });
+
+if (grantAllBtn) {
+    grantAllBtn.addEventListener('click', () => {
+        if (confirm("Grant full access (Edit, Upload, Delete) to everyone in the room?")) {
+            socket.emit('update-permissions', { 
+                roomId: currentRoomId, 
+                allowEdit: true, 
+                allowUpload: true, 
+                allowDelete: true 
+            });
+        }
+    });
+}
 
 // Real-time Text Syncing
 editor.addEventListener('input', () => {

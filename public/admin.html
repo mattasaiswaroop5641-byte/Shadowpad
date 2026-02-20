@@ -116,8 +116,19 @@
 
     <!-- Active Users View -->
     <div id="active-view" class="admin-container" style="display:none; margin-top: 2rem;">
-        <h2>🟢 Active Users (Real-time)</h2>
-        <div id="active-list"></div>
+        <h2>🟢 Active Sessions</h2>
+        
+        <div style="margin-bottom: 3rem;">
+            <h3 style="color: #818cf8; border-bottom: 1px solid rgba(129, 140, 248, 0.2); padding-bottom: 10px; margin-bottom: 15px;">👥 Active Rooms</h3>
+            <div id="active-rooms-list" class="room-grid"></div>
+            <p id="no-rooms-msg" class="empty-state" style="display:none; padding: 1rem;">No active rooms.</p>
+        </div>
+
+        <div>
+            <h3 style="color: #fbbf24; border-bottom: 1px solid rgba(251, 191, 36, 0.2); padding-bottom: 10px; margin-bottom: 15px;">📝 Active Notepads</h3>
+            <div id="active-notepads-list" class="room-grid"></div>
+            <p id="no-notepads-msg" class="empty-state" style="display:none; padding: 1rem;">No active notepads.</p>
+        </div>
     </div>
 
     <script>
@@ -254,29 +265,31 @@
         }
 
         async function loadActiveUsers(secret = currentSecret) {
-            const container = document.getElementById('active-list');
+            const roomsContainer = document.getElementById('active-rooms-list');
+            const notepadsContainer = document.getElementById('active-notepads-list');
+            const noRoomsMsg = document.getElementById('no-rooms-msg');
+            const noNotepadsMsg = document.getElementById('no-notepads-msg');
+
             try {
                 const res = await fetch(`/api/active-rooms?secret=${encodeURIComponent(secret)}`);
                 if (!res.ok) throw new Error('Failed to fetch active users');
-                const rooms = await res.json();
+                const allSessions = await res.json();
 
-                if (rooms.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No active users online.</div>';
-                    return;
-                }
+                const rooms = allSessions.filter(r => r.type !== 'notepad');
+                const notepads = allSessions.filter(r => r.type === 'notepad');
 
-                let html = '<div class="room-grid">';
-                rooms.forEach(room => {
-                    // Sort users: Host first
-                    room.users.sort((a, b) => (b.isHost ? 1 : 0) - (a.isHost ? 1 : 0));
-                    
-                    const typeLabel = room.type === 'notepad' ? 'Notepad' : 'Room';
-                    const displayTitle = `${typeLabel}: ${room.roomName || room.roomId}`;
+                const renderCards = (list) => {
+                    return list.map(room => {
+                        // Sort users: Host first
+                        room.users.sort((a, b) => (b.isHost ? 1 : 0) - (a.isHost ? 1 : 0));
+                        const typeLabel = room.type === 'notepad' ? 'Notepad' : 'Room';
+                        const cleanName = (room.roomName || room.roomId).replace(/^(ROOM:|NOTE:)/, '');
+                        const displayTitle = `${typeLabel}: ${cleanName}`;
 
-                    html += `
+                        return `
                         <div class="room-card">
                             <div class="room-header">
-                                <span class="room-title">${displayTitle}</span>
+                                <span class="room-title" style="color: ${room.type === 'notepad' ? '#fbbf24' : '#818cf8'}">${displayTitle}</span>
                                 <span class="badge">${room.users.length} users</span>
                             </div>
                             <ul class="room-users">
@@ -291,10 +304,26 @@
                                 `).join('')}
                             </ul>
                         </div>
-                    `;
-                });
-                html += '</div>';
-                container.innerHTML = html;
+                        `;
+                    }).join('');
+                };
+
+                if (rooms.length > 0) {
+                    roomsContainer.innerHTML = renderCards(rooms);
+                    noRoomsMsg.style.display = 'none';
+                } else {
+                    roomsContainer.innerHTML = '';
+                    noRoomsMsg.style.display = 'block';
+                }
+                
+                if (notepads.length > 0) {
+                    notepadsContainer.innerHTML = renderCards(notepads);
+                    noNotepadsMsg.style.display = 'none';
+                } else {
+                    notepadsContainer.innerHTML = '';
+                    noNotepadsMsg.style.display = 'block';
+                }
+
             } catch (e) {
                 console.error(e);
             }
