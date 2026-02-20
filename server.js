@@ -10,6 +10,7 @@ const io = new Server(server);
 
 // Global State
 const rooms = {}; // In-memory state for active rooms
+let isDbConnected = false; // Track DB connection status
 
 // 1. MongoDB Connection
 // Ensure you have MongoDB running locally or use a cloud URI
@@ -17,18 +18,21 @@ const rooms = {}; // In-memory state for active rooms
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Admin:Mgsai1042@cluster0.iygxgom.mongodb.net/shadowpad?appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log('✅ MongoDB Connected'))
+    .then(() => {
+        console.log('✅ MongoDB Connected');
+        isDbConnected = true;
+    })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.codeName || err.message);
-        console.log('👉 If you are running locally, make sure MongoDB Community Server is started.');
-        console.log('👉 If you want to use Cloud DB, set MONGO_URI in your environment or replace the string in server.js.');
+        console.log('⚠️  Running in MEMORY-ONLY mode. Real-time features work, but data will NOT persist after restart.');
+        isDbConnected = false;
     });
 
 // 2. Define Pad Schema
 const PadSchema = new mongoose.Schema({
     roomId: { type: String, required: true, unique: true },
     content: { type: String, default: "" }, // Stores the Encrypted Blob
-    lastActive: { type: Date, default: Date.now }
+    lastActive: { type: Date, default: Date.now, expires: 259200 } // Auto-delete if inactive for 3 days (3 * 24 * 60 * 60)
 });
 const Pad = mongoose.model('Pad', PadSchema);
 
@@ -39,6 +43,10 @@ app.use(express.json()); // Crucial for parsing JSON body in POST requests
 // 4. API Route: Save Encrypted Pad
 app.post('/api/save-pad', async (req, res) => {
     try {
+        if (!isDbConnected) {
+            return res.status(503).json({ error: 'Database not connected. Data stored in memory only.' });
+        }
+
         const { roomId, content } = req.body;
         
         if (!roomId || !content) {
@@ -63,13 +71,25 @@ app.post('/api/save-pad', async (req, res) => {
 // 4.1 API Route: Delete Pad
 app.delete('/api/delete-pad', async (req, res) => {
     try {
+        if (!isDbConnected) {
+            return res.status(503).json({ error: 'Database not connected.' });
+        }
+
         const { roomId, secret } = req.body;
         
         if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
         if (!roomId) return res.status(400).json({ error: 'Room ID required' });
 
         await Pad.findOneAndDelete({ roomId });
-        if (rooms[roomId]) delete rooms[roomId]; // Clear from memory
+        
+        // Disconnect all users in the deleted room
+        if (rooms[roomId]) {
+            rooms[roomId].users.forEach(u => {
+                const socket = io.sockets.sockets.get(u.id);
+                if (socket) socket.disconnect(true);
+            });
+            delete rooms[roomId]; // Clear from memory
+        }
 
         console.log(`🗑️ Pad deleted: ${roomId}`);
         res.status(200).json({ success: true, message: 'Pad deleted' });
@@ -82,6 +102,10 @@ app.delete('/api/delete-pad', async (req, res) => {
 // 4.2 API Route: Get All Pads (Admin Dashboard)
 app.get('/api/pads', async (req, res) => {
     try {
+        if (!isDbConnected) {
+            return res.json([]); // Return empty list if no DB
+        }
+
         // Simple security check (Use ?secret=Mgsai1042 in URL)
         if (req.query.secret !== 'Mgsai1042') {
             return res.status(403).json({ error: 'Unauthorized access' });
@@ -153,8 +177,14 @@ io.on('connection', (socket) => {
         let room = rooms[roomId];
 
         // If room not active, check MongoDB
-        if (!room) {
-            const savedPad = await Pad.findOne({ roomId });
+        if (!room && isDbConnected) {
+            // Find and update lastActive to reset the 3-day timer
+            const savedPad = await Pad.findOneAndUpdate(
+                { roomId },
+                { lastActive: Date.now() },
+                { new: true }
+            );
+
             if (savedPad) {
                 // Restore room from DB
                 room = rooms[roomId] = {
@@ -207,7 +237,19 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('activity-log', `${userName} joined.`);
     }
 
-    // ... Add other handlers (upload-file, delete-file, disconnect) as needed ...
+    // Handle Disconnect
+    socket.on('disconnect', () => {
+        Object.keys(rooms).forEach(roomId => {
+            const room = rooms[roomId];
+            const index = room.users.findIndex(u => u.id === socket.id);
+            if (index !== -1) {
+                const user = room.users[index];
+                room.users.splice(index, 1);
+                io.to(roomId).emit('update-user-list', room.users);
+                io.to(roomId).emit('activity-log', `${user.name} left.`);
+            }
+        });
+    });
 });
 
 const PORT = process.env.PORT || 3000;

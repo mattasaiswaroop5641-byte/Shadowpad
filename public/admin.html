@@ -143,7 +143,7 @@
                     <tr>
                         <td><span class="badge">${pad.roomId}</span></td>
                         <td>${new Date(pad.lastActive).toLocaleString()}</td>
-                        <td>${pad.content.length} chars</td>
+                        <td>${(pad.content || '').length} chars</td>
                         <td>
                             <button class="btn-danger" onclick="deletePad('${pad.roomId}')">Delete</button>
                         </td>
@@ -169,6 +169,7 @@
             const tbody = document.getElementById('active-list');
             try {
                 const res = await fetch(`/api/active-rooms?secret=${encodeURIComponent(secret)}`);
+                if (!res.ok) throw new Error('Failed to fetch active users');
                 const rooms = await res.json();
 
                 if (rooms.length === 0) {
