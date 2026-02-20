@@ -24,6 +24,17 @@ mongoose.connect(MONGO_URI)
         
         // DEBUG: Print Database Stats on Startup
         console.log(`📂 Connected to Database: "${mongoose.connection.name}"`);
+        
+        // DIAGNOSTIC: List all databases and their sizes
+        try {
+            const adminDb = mongoose.connection.db.admin();
+            const result = await adminDb.listDatabases();
+            console.log("------------------------------------------------");
+            console.log("📊 CLUSTER STORAGE BREAKDOWN:");
+            result.databases.forEach(db => console.log(`   ➤ ${db.name}: ${(db.sizeOnDisk / 1024 / 1024).toFixed(2)} MB`));
+            console.log("------------------------------------------------");
+        } catch (e) { console.error("Error listing DBs:", e.message); }
+
         try {
             const count = await Pad.countDocuments();
             console.log(`📊 Found ${count} pads in the collection.`);
@@ -158,6 +169,21 @@ app.delete('/api/cleanup-pads', async (req, res) => {
     } catch (error) {
         console.error('Cleanup failed:', error);
         res.status(500).json({ error: 'Cleanup failed' });
+    }
+});
+
+// 4.2.2 API Route: Drop Database (Nuclear Option)
+app.delete('/api/drop-database', async (req, res) => {
+    try {
+        if (!isDbConnected) return res.status(503).json({ error: 'No DB' });
+        const { secret } = req.body;
+        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+
+        await mongoose.connection.db.dropDatabase();
+        console.log('💥 Database dropped successfully.');
+        res.json({ success: true, message: 'Current database dropped. All data is gone.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Drop failed' });
     }
 });
 

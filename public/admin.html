@@ -69,6 +69,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h1>🛡️ ShadowPad Admin</h1>
             <button id="cleanup-btn" class="btn-danger" style="background: rgba(234, 179, 8, 0.1); color: #facc15; border-color: rgba(234, 179, 8, 0.2); margin-right: 10px;">🧹 Clean Old Data</button>
+            <button id="nuke-btn" class="btn-danger" style="background: rgba(220, 38, 38, 0.2); color: #fca5a5; border-color: rgba(220, 38, 38, 0.4); margin-right: 10px;">☢️ Drop DB</button>
             <button id="logout-btn" class="btn-danger">Logout</button>
         </div>
         
@@ -152,6 +153,19 @@
                 method: 'DELETE',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ secret: currentSecret, days: parseInt(days) })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadPads();
+        });
+
+        document.getElementById('nuke-btn').addEventListener('click', async () => {
+            if (!confirm("⚠️ DANGER: This will delete ALL data in the current database. Are you sure?")) return;
+            
+            const res = await fetch('/api/drop-database', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ secret: currentSecret })
             });
             const data = await res.json();
             alert(data.message || data.error);
