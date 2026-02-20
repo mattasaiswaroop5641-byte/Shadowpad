@@ -1,3 +1,10 @@
+// Inject CryptoJS for Client-Side Encryption
+if (!window.CryptoJS) {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js";
+    document.head.appendChild(script);
+}
+
 const socket = io();
 
 // Element Selectors from your HTML
@@ -24,6 +31,7 @@ const fileCountBadge = document.getElementById('file-count');
 let currentRoomId = null;
 let roomFiles = []; // Local cache for file content
 let isPadMode = false;
+let roomPassword = ''; // Store password for encryption
 
 // --- Theme Initialization ---
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -116,6 +124,28 @@ function setupToolbar() {
         }}
     ];
 
+    // Encrypted Exit Button (Hidden by default, shown in Pad Mode)
+    const exitBtn = document.createElement('button');
+    exitBtn.className = 'nav-btn';
+    exitBtn.id = 'encrypted-exit-btn';
+    exitBtn.innerHTML = '🔒';
+    exitBtn.title = 'Sync & Destroy (Encrypted Exit)';
+    exitBtn.style.display = 'none';
+    exitBtn.style.color = '#fbbf24';
+    exitBtn.onclick = handleEncryptedExit;
+    actionsDiv.appendChild(exitBtn);
+
+    // Delete Pad Button (Hidden by default, shown in Pad Mode)
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'nav-btn';
+    deleteBtn.id = 'delete-pad-btn';
+    deleteBtn.innerHTML = '🗑️';
+    deleteBtn.title = 'Delete Pad Forever';
+    deleteBtn.style.display = 'none';
+    deleteBtn.style.color = '#ef4444';
+    deleteBtn.onclick = handleDeletePad;
+    actionsDiv.appendChild(deleteBtn);
+
     tools.forEach(t => {
         const btn = document.createElement('button');
         btn.className = 'nav-btn';
@@ -129,6 +159,58 @@ function setupToolbar() {
     toolbar.appendChild(actionsDiv);
 }
 setupToolbar();
+
+async function handleEncryptedExit() {
+    if (!roomPassword) return alert("No encryption key found.");
+    
+    const btn = document.getElementById('encrypted-exit-btn');
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '⏳';
+    btn.disabled = true;
+
+    try {
+        // 1. Encrypt data with the room password
+        const encryptedData = CryptoJS.AES.encrypt(editor.value, roomPassword).toString();
+        
+        // 2. Send to backend (MongoDB) via API
+        const response = await fetch('/api/save-pad', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: currentRoomId, content: encryptedData })
+        });
+
+        if (!response.ok) throw new Error('Failed to save to database');
+
+        // 3. Clear local state and leave
+        alert("Data encrypted and saved to MongoDB. Leaving room...");
+        window.location.reload();
+    } catch (error) {
+        console.error(error);
+        alert("Error saving pad: " + error.message);
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+}
+
+async function handleDeletePad() {
+    if (!confirm("⚠️ PERMANENTLY DELETE this pad?\n\nThis will remove the encrypted data from the database. This action cannot be undone.")) return;
+
+    try {
+        const response = await fetch('/api/delete-pad', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: currentRoomId })
+        });
+
+        if (!response.ok) throw new Error('Failed to delete pad');
+
+        alert("Pad deleted from MongoDB.");
+        window.location.reload();
+    } catch (error) {
+        console.error(error);
+        alert("Error deleting pad: " + error.message);
+    }
+}
 
 // Tab Switching Logic
 document.querySelectorAll('.tab-btn').forEach(tab => {
@@ -169,14 +251,14 @@ function injectStyleSwitcher() {
                     <input type="password" id="pad-password" placeholder="Enter password" required>
                     <button type="button" class="toggle-password">👁️</button>
                 </div>
-                <p class="form-hint">🔒 Data is locked with this password. Auto-deletes after 30 days.</p>
+                <p class="form-hint" style="color:#fbbf24;">⚠️ Encrypted & Saved to MongoDB. Password is the only key.</p>
             </div>
             <div class="input-group">
                 <label style="display:flex; justify-content:space-between;">
                     <span>Max Users</span>
                     <span id="pad-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
                 </label>
-                <input type="range" id="pad-max-users" min="2" max="60" value="20" style="width:100%; margin-top:8px;">
+                <input type="range" id="pad-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;">
             </div>
             <div class="pad-actions">
                 <button type="submit" class="btn btn-primary" title="Join existing note">Open Note</button>
@@ -218,15 +300,17 @@ function injectStyleSwitcher() {
     padForm.addEventListener('submit', (e) => {
         e.preventDefault();
         isPadMode = true;
-        socket.emit('join-room', { roomId: document.getElementById('pad-name').value.toUpperCase(), password: document.getElementById('pad-password').value, userName: 'Anonymous' });
+        roomPassword = document.getElementById('pad-password').value;
+        socket.emit('join-room', { roomId: document.getElementById('pad-name').value.toUpperCase(), password: roomPassword, userName: 'Anonymous' });
     });
 
     document.getElementById('pad-create-btn').addEventListener('click', () => {
         if(padForm.checkValidity()) {
             isPadMode = true;
+            roomPassword = document.getElementById('pad-password').value;
             socket.emit('create-room', { 
                 roomName: document.getElementById('pad-name').value, 
-                password: document.getElementById('pad-password').value, 
+                password: roomPassword, 
                 userName: 'Anonymous',
                 maxUsers: parseInt(document.getElementById('pad-max-users').value)
             });
@@ -248,7 +332,7 @@ function injectRoomSlider() {
                 <span>Max Users</span>
                 <span id="room-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
             </label>
-            <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:8px;">
+            <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;">
         </div>
     `;
     
@@ -270,7 +354,7 @@ createForm.addEventListener('submit', (e) => {
     isPadMode = false;
     const roomName = document.getElementById('room-name').value;
     const userName = document.getElementById('owner-name').value;
-    const password = document.getElementById('create-password').value;
+    const password = roomPassword = document.getElementById('create-password').value;
     const maxUsers = document.getElementById('room-max-users') ? parseInt(document.getElementById('room-max-users').value) : 20;
     socket.emit('create-room', { roomName, password, userName, maxUsers });
 });
@@ -281,7 +365,7 @@ joinForm.addEventListener('submit', (e) => {
     isPadMode = false;
     const roomId = document.getElementById('join-room-id').value.toUpperCase();
     const userName = document.getElementById('join-name').value;
-    const password = document.getElementById('join-password').value;
+    const password = roomPassword = document.getElementById('join-password').value;
     socket.emit('join-room', { roomId, password, userName });
 });
 
@@ -293,8 +377,33 @@ function enterRoom(id, name, content, users, isHost, files) {
 
     if (isPadMode) {
         document.body.classList.add('pad-mode');
+        document.getElementById('encrypted-exit-btn').style.display = 'inline-flex';
+        document.getElementById('delete-pad-btn').style.display = 'inline-flex';
+        
+        // Add Lock Icon if not present
+        if (!document.querySelector('.lock-status')) {
+            const lock = document.createElement('span');
+            lock.className = 'lock-status';
+            lock.innerHTML = '🔒';
+            lock.title = 'End-to-End Encrypted';
+            roomNameDisplay.appendChild(lock);
+        }
+
+        // Decrypt Content
+        if (content) {
+            try {
+                const bytes = CryptoJS.AES.decrypt(content, roomPassword);
+                const originalText = bytes.toString(CryptoJS.enc.Utf8);
+                if (originalText) content = originalText;
+            } catch (e) {
+                console.error("Decryption failed", e);
+                content = "--- 🔒 ENCRYPTED DATA (WRONG PASSWORD?) ---";
+            }
+        }
     } else {
         document.body.classList.remove('pad-mode');
+        document.getElementById('encrypted-exit-btn').style.display = 'none';
+        document.getElementById('delete-pad-btn').style.display = 'none';
     }
 
     roomNameDisplay.innerText = name;

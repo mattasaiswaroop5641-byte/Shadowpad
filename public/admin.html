@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowPad Admin</title>
+    <link rel="stylesheet" href="src/css/main.css">
+    <style>
+        body { overflow: auto; padding: 2rem; background-color: #0f172a; color: #fff; }
+        .admin-container { max-width: 1000px; margin: 0 auto; }
+        
+        h1 { margin-bottom: 0.5rem; color: #818cf8; }
+        p { color: #94a3b8; margin-bottom: 2rem; }
+
+        table { width: 100%; border-collapse: collapse; background: rgba(30, 41, 59, 0.5); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { background: rgba(30, 41, 59, 0.8); color: #818cf8; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; background: #334155; color: #cbd5e1; font-family: monospace; }
+        
+        .btn-danger { 
+            background: rgba(239, 68, 68, 0.1); 
+            color: #ef4444; 
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        .empty-state { text-align: center; padding: 3rem; color: #64748b; font-style: italic; }
+
+        /* Login Styles */
+        .login-container { max-width: 400px; margin: 100px auto; text-align: center; background: rgba(30, 41, 59, 0.5); padding: 2rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); }
+        .login-input { width: 100%; padding: 12px; margin-bottom: 1rem; background: rgba(15, 23, 42, 0.8); border: 1px solid #334155; color: white; border-radius: 8px; outline: none; }
+        .login-input:focus { border-color: #818cf8; }
+        .btn-primary { background: #6366f1; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s; }
+        .btn-primary:hover { background: #818cf8; }
+        #dashboard-view { display: none; }
+        .error-msg { color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Login View -->
+    <div id="login-view" class="login-container">
+        <h1>🔐 Admin Login</h1>
+        <p>Enter admin secret to continue</p>
+        <form id="login-form">
+            <input type="password" id="admin-secret" class="login-input" placeholder="Admin Secret" required>
+            <button type="submit" class="btn-primary">Access Dashboard</button>
+            <p id="login-error" class="error-msg"></p>
+        </form>
+    </div>
+
+    <!-- Dashboard View -->
+    <div id="dashboard-view" class="admin-container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>🛡️ ShadowPad Admin</h1>
+            <button id="logout-btn" class="btn-danger">Logout</button>
+        </div>
+        <p>Manage encrypted MongoDB records.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Room ID</th>
+                    <th>Last Active</th>
+                    <th>Encrypted Size</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="pad-list">
+                <!-- Rows injected here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let currentSecret = '';
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const secret = document.getElementById('admin-secret').value;
+            const errorMsg = document.getElementById('login-error');
+            
+            try {
+                await loadPads(secret);
+                // If successful:
+                currentSecret = secret;
+                document.getElementById('login-view').style.display = 'none';
+                document.getElementById('dashboard-view').style.display = 'block';
+            } catch (err) {
+                errorMsg.textContent = "Access Denied: Incorrect Secret";
+                errorMsg.style.display = 'block';
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            currentSecret = '';
+            document.getElementById('admin-secret').value = '';
+            document.getElementById('dashboard-view').style.display = 'none';
+            document.getElementById('login-view').style.display = 'block';
+        });
+
+        async function loadPads(secret = currentSecret) {
+            const tbody = document.getElementById('pad-list');
+            try {
+                const res = await fetch(`/api/pads?secret=${encodeURIComponent(secret)}`);
+                if (!res.ok) {
+                    // Attempt to read error message from server
+                    const errText = await res.text(); 
+                    throw new Error(`Status ${res.status}: ${errText}`);
+                }
+                const pads = await res.json();
+
+                if (pads.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No pads found in database.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = pads.map(pad => `
+                    <tr>
+                        <td><span class="badge">${pad.roomId}</span></td>
+                        <td>${new Date(pad.lastActive).toLocaleString()}</td>
+                        <td>${pad.content.length} chars</td>
+                        <td>
+                            <button class="btn-danger" onclick="deletePad('${pad.roomId}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state" style="color:#ef4444">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        async function deletePad(roomId) {
+            if(!confirm(`Are you sure you want to delete the pad "${roomId}"? This cannot be undone.`)) return;
+            
+            await fetch('/api/delete-pad', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ roomId })
+            });
+            loadPads(); // Refresh list
+        }
+    </script>
+</body>
+</html>
