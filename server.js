@@ -50,7 +50,7 @@ mongoose.connect(MONGO_URI)
 const PadSchema = new mongoose.Schema({
     roomId: { type: String, required: true, unique: true },
     content: { type: String, default: "" }, // Stores the Encrypted Blob
-    lastActive: { type: Date, default: Date.now, expires: 259200 } // Auto-delete if inactive for 3 days (3 * 24 * 60 * 60)
+    lastActive: { type: Date, default: Date.now, expires: 2592000 } // Auto-delete if inactive for 30 days (30 * 24 * 60 * 60)
 });
 const Pad = mongoose.model('Pad', PadSchema);
 
@@ -203,6 +203,8 @@ app.get('/api/active-rooms', (req, res) => {
     // Convert rooms object to array
     const activeData = Object.values(rooms).map(r => ({
         roomId: r.id,
+        roomName: r.name,
+        type: r.type,
         users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost }))
     }));
     res.json(activeData);
@@ -228,7 +230,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Create Room
-    socket.on('create-room', ({ roomName, password, userName, maxUsers }) => {
+    socket.on('create-room', ({ roomName, password, userName, maxUsers, type }) => {
         const roomId = roomName.toUpperCase();
         if (rooms[roomId]) {
             socket.emit('error-msg', 'Room already exists');
@@ -238,6 +240,7 @@ io.on('connection', (socket) => {
         rooms[roomId] = {
             id: roomId,
             name: roomName,
+            type: type || 'room',
             password, 
             users: [],
             files: [],
@@ -256,7 +259,7 @@ io.on('connection', (socket) => {
 
         // If room not active, check MongoDB
         if (!room && isDbConnected) {
-            // Find and update lastActive to reset the 3-day timer
+            // Find and update lastActive to reset the 30-day timer
             const savedPad = await Pad.findOneAndUpdate(
                 { roomId },
                 { lastActive: Date.now() },
@@ -268,6 +271,7 @@ io.on('connection', (socket) => {
                 room = rooms[roomId] = {
                     id: roomId,
                     name: roomId,
+                    type: 'notepad', // Restored pads are treated as Notepads
                     password: password, // The password entered becomes the session key
                     users: [],
                     files: [],
@@ -277,6 +281,9 @@ io.on('connection', (socket) => {
                     permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
                 };
             }
+        } else if (room && isDbConnected) {
+            // If room exists in memory, refresh the DB timer anyway (if it exists in DB)
+            Pad.findOneAndUpdate({ roomId }, { lastActive: Date.now() }).exec().catch(() => {});
         }
 
         if (!room) return socket.emit('error-msg', 'Room not found');

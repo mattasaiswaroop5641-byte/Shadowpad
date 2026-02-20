@@ -134,6 +134,17 @@ function setupToolbar() {
         }}
     ];
 
+    // Encrypted Save Button (Hidden by default, shown in Pad Mode)
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'nav-btn';
+    saveBtn.id = 'encrypted-save-btn';
+    saveBtn.innerHTML = '💾';
+    saveBtn.title = 'Save to Database';
+    saveBtn.style.display = 'none';
+    saveBtn.style.color = '#4ade80';
+    saveBtn.onclick = handleEncryptedSave;
+    actionsDiv.appendChild(saveBtn);
+
     // Encrypted Exit Button (Hidden by default, shown in Pad Mode)
     const exitBtn = document.createElement('button');
     exitBtn.className = 'nav-btn';
@@ -169,6 +180,41 @@ function setupToolbar() {
     toolbar.appendChild(actionsDiv);
 }
 setupToolbar();
+
+async function handleEncryptedSave() {
+    if (!roomPassword) return alert("No encryption key found.");
+    
+    const btn = document.getElementById('encrypted-save-btn');
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '⏳';
+    btn.disabled = true;
+
+    try {
+        // 1. Encrypt data with the room password
+        const encryptedData = CryptoJS.AES.encrypt(editor.value, roomPassword).toString();
+        
+        // 2. Send to backend (MongoDB) via API
+        const response = await fetch('/api/save-pad', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: currentRoomId, content: encryptedData })
+        });
+
+        if (!response.ok) throw new Error('Failed to save to database');
+
+        // 3. Visual Feedback
+        btn.innerHTML = '✅';
+        setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }, 1500);
+    } catch (error) {
+        console.error(error);
+        alert("Error saving pad: " + error.message);
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+}
 
 async function handleEncryptedExit() {
     if (!roomPassword) return alert("No encryption key found.");
@@ -243,7 +289,7 @@ function injectStyleSwitcher() {
     const switcherHtml = `
         <div class="style-switcher">
             <button class="style-btn active" data-style="room">👥 Room Style</button>
-            <button class="style-btn" data-style="pad">📝 Pad Style</button>
+            <button class="style-btn" data-style="pad">📝 Notepad</button>
         </div>
     `;
     authCard.insertAdjacentHTML('afterbegin', switcherHtml);
@@ -321,7 +367,8 @@ function injectStyleSwitcher() {
                 roomName: document.getElementById('pad-name').value, 
                 password: roomPassword, 
                 userName: 'Anonymous',
-                maxUsers: parseInt(document.getElementById('pad-max-users').value)
+                maxUsers: parseInt(document.getElementById('pad-max-users').value),
+                type: 'notepad'
             });
         }
         else padForm.reportValidity();
@@ -337,7 +384,7 @@ createForm.addEventListener('submit', (e) => {
     const userName = document.getElementById('owner-name').value;
     const password = roomPassword = document.getElementById('create-password').value;
     const maxUsers = document.getElementById('room-max-users') ? parseInt(document.getElementById('room-max-users').value) : 20;
-    socket.emit('create-room', { roomName, password, userName, maxUsers });
+    socket.emit('create-room', { roomName, password, userName, maxUsers, type: 'room' });
 });
 
 // Handle Joining a Room
@@ -396,6 +443,7 @@ function enterRoom(id, name, content, users, isHost, files, permissions) {
 
     if (isPadMode) {
         document.body.classList.add('pad-mode');
+        document.getElementById('encrypted-save-btn').style.display = 'inline-flex';
         document.getElementById('encrypted-exit-btn').style.display = 'inline-flex';
         document.getElementById('delete-pad-btn').style.display = 'inline-flex';
         
@@ -410,17 +458,21 @@ function enterRoom(id, name, content, users, isHost, files, permissions) {
 
         // Decrypt Content
         if (content) {
-            try {
-                const bytes = CryptoJS.AES.decrypt(content, roomPassword);
-                const originalText = bytes.toString(CryptoJS.enc.Utf8);
-                if (originalText) content = originalText;
-            } catch (e) {
-                console.error("Decryption failed", e);
-                content = "--- 🔒 ENCRYPTED DATA (WRONG PASSWORD?) ---";
+            // Only attempt decryption if content looks encrypted (starts with "Salted__")
+            if (content.startsWith('U2FsdGVkX1')) {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(content, roomPassword);
+                    const originalText = bytes.toString(CryptoJS.enc.Utf8);
+                    if (originalText) content = originalText;
+                } catch (e) {
+                    console.error("Decryption failed", e);
+                    content = "--- 🔒 ENCRYPTED DATA (WRONG PASSWORD?) ---";
+                }
             }
         }
     } else {
         document.body.classList.remove('pad-mode');
+        document.getElementById('encrypted-save-btn').style.display = 'none';
         document.getElementById('encrypted-exit-btn').style.display = 'none';
         document.getElementById('delete-pad-btn').style.display = 'none';
     }

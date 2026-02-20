@@ -1,4 +1,0 @@
-MongoDB-https://cloud.mongodb.com/v2/69986317d68b8d29ca9b64a7#/clusters
-ADMIN PANNEL-https://shadowpad.onrender.com/admin.html
-RENDER DASHBOARD-https://dashboard.render.com/web/srv-d6aui60gjchc73bm3a10/events
-MONGODB USERS-https://cloud.mongodb.com/v2/69986317d68b8d29ca9b64a7#/access/users

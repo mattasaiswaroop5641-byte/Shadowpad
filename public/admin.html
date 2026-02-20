@@ -103,6 +103,7 @@
                 <tr>
                     <th>Room ID</th>
                     <th>Last Active</th>
+                    <th>Days Remaining</th>
                     <th>Encrypted Size</th>
                     <th>Actions</th>
                 </tr>
@@ -204,7 +205,7 @@
                 const pads = await res.json();
 
                 if (pads.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No pads found in database.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pads found in database.</td></tr>';
                     return;
                 }
 
@@ -214,18 +215,30 @@
                 const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
                 document.getElementById('total-size').textContent = `${totalMB} MB`;
 
-                tbody.innerHTML = pads.map(pad => `
+                tbody.innerHTML = pads.map(pad => {
+                    const lastActive = new Date(pad.lastActive);
+                    const expiryDate = new Date(lastActive.getTime() + (30 * 24 * 60 * 60 * 1000));
+                    const now = new Date();
+                    const diffTime = expiryDate - now;
+                    const daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                    
+                    let badgeStyle = 'background:#10b981; color:#000'; // Green
+                    if (daysRemaining <= 3) badgeStyle = 'background:#ef4444; color:#fff'; // Red
+                    else if (daysRemaining <= 7) badgeStyle = 'background:#f59e0b; color:#000'; // Orange
+
+                    return `
                     <tr>
                         <td><span class="badge">${pad.roomId}</span></td>
-                        <td>${new Date(pad.lastActive).toLocaleString()}</td>
+                        <td>${lastActive.toLocaleString()}</td>
+                        <td><span class="badge" style="${badgeStyle}">${daysRemaining} days</span></td>
                         <td>${pad.size} chars</td>
                         <td>
                             <button class="btn-danger" onclick="deletePad('${pad.roomId.replace(/'/g, "\\'")}')">Delete</button>
                         </td>
                     </tr>
-                `).join('');
+                `}).join('');
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="4" class="empty-state" style="color:#ef4444">Error: ${e.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#ef4444">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -254,17 +267,23 @@
 
                 let html = '<div class="room-grid">';
                 rooms.forEach(room => {
+                    // Sort users: Host first
+                    room.users.sort((a, b) => (b.isHost ? 1 : 0) - (a.isHost ? 1 : 0));
+                    
+                    const typeLabel = room.type === 'notepad' ? 'Notepad' : 'Room';
+                    const displayTitle = `${typeLabel}: ${room.roomName || room.roomId}`;
+
                     html += `
                         <div class="room-card">
                             <div class="room-header">
-                                <span class="room-title">Room: ${room.roomId}</span>
+                                <span class="room-title">${displayTitle}</span>
                                 <span class="badge">${room.users.length} users</span>
                             </div>
                             <ul class="room-users">
                                 ${room.users.map(user => `
                                     <li>
                                         <div class="user-info">
-                                            <span>${user.name} ${user.isHost ? '👑' : ''}</span>
+                                            <span>${user.name} ${user.isHost ? '<span style="color:#fbbf24; font-weight:bold; margin-left:4px;">(Host)</span>' : ''}</span>
                                             <span class="user-id">(${user.id.substr(0, 6)}...)</span>
                                         </div>
                                         <button class="btn-danger btn-sm" onclick="kickUser('${user.id}')">Kick</button>
