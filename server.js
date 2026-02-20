@@ -290,9 +290,10 @@ io.on('connection', (socket) => {
     socket.on('update-text', ({ roomId, content }) => {
         const room = rooms[roomId];
         if (room) {
+            const user = room.users.find(u => u.id === socket.id);
             const isHost = socket.id === room.hostId;
             // Explicitly check if permission is false (strict check)
-            if (!isHost && room.permissions.allowEdit === false) {
+            if (!isHost && user && user.permissions.allowEdit === false) {
                 return;
             }
             room.content = content;
@@ -304,8 +305,9 @@ io.on('connection', (socket) => {
     socket.on('typing', ({ roomId, isTyping }) => {
         const room = rooms[roomId];
         if (room) {
+            const user = room.users.find(u => u.id === socket.id);
             const isHost = socket.id === room.hostId;
-            if (!isHost && room.permissions.allowEdit === false) {
+            if (!isHost && user && user.permissions.allowEdit === false) {
                 return;
             }
             socket.to(roomId).emit('user-typing', { userId: socket.id, isTyping });
@@ -315,7 +317,12 @@ io.on('connection', (socket) => {
     // Helper: Join Logic
     function joinRoomLogic(socket, roomId, userName, isHost) {
         const room = rooms[roomId];
-        const user = { id: socket.id, name: userName, isHost: isHost || socket.id === room.hostId };
+        const user = { 
+            id: socket.id, 
+            name: userName, 
+            isHost: isHost || socket.id === room.hostId,
+            permissions: { ...room.permissions } // Initialize with current room defaults
+        };
         
         room.users.push(user);
         socket.join(roomId);
@@ -327,7 +334,7 @@ io.on('connection', (socket) => {
             users: room.users,
             isHost: user.isHost,
             files: room.files,
-            permissions: room.permissions
+            permissions: user.permissions // Send user's specific permissions
         });
         
         io.to(roomId).emit('update-user-list', room.users);
@@ -338,10 +345,36 @@ io.on('connection', (socket) => {
     socket.on('update-permissions', ({ roomId, allowEdit, allowUpload, allowDelete }) => {
         const room = rooms[roomId];
         if (room && room.hostId === socket.id) {
+            // Update global defaults
             if (allowEdit !== undefined) room.permissions.allowEdit = !!allowEdit;
             if (allowUpload !== undefined) room.permissions.allowUpload = !!allowUpload;
             if (allowDelete !== undefined) room.permissions.allowDelete = !!allowDelete;
-            io.to(roomId).emit('update-permissions', room.permissions);
+            
+            // Update ALL users to match defaults (Master Switch)
+            room.users.forEach(u => {
+                if (!u.isHost) {
+                    if (allowEdit !== undefined) u.permissions.allowEdit = !!allowEdit;
+                    if (allowUpload !== undefined) u.permissions.allowUpload = !!allowUpload;
+                    if (allowDelete !== undefined) u.permissions.allowDelete = !!allowDelete;
+                }
+            });
+
+            io.to(roomId).emit('update-permissions', room.permissions); // Update sidebar checkboxes
+            io.to(roomId).emit('update-user-list', room.users); // Update individual user states
+        }
+    });
+
+    // Handle Single User Permission Toggle
+    socket.on('toggle-user-permission', ({ roomId, userId, permission, value }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            const user = room.users.find(u => u.id === userId);
+            if (user && !user.isHost) {
+                if (permission === 'allowEdit') user.permissions.allowEdit = !!value;
+                if (permission === 'allowUpload') user.permissions.allowUpload = !!value;
+                if (permission === 'allowDelete') user.permissions.allowDelete = !!value;
+                io.to(roomId).emit('update-user-list', room.users);
+            }
         }
     });
 
@@ -368,8 +401,9 @@ io.on('connection', (socket) => {
     socket.on('upload-file', ({ roomId, file }) => {
         const room = rooms[roomId];
         if (room) {
+            const user = room.users.find(u => u.id === socket.id);
             const isHost = socket.id === room.hostId;
-            if (!isHost && room.permissions.allowUpload === false) {
+            if (!isHost && user && user.permissions.allowUpload === false) {
                 return socket.emit('error-msg', 'Uploads disabled by host');
             }
             file.id = Date.now().toString();
@@ -383,8 +417,9 @@ io.on('connection', (socket) => {
     socket.on('delete-file', ({ roomId, fileId }) => {
         const room = rooms[roomId];
         if (room) {
+            const user = room.users.find(u => u.id === socket.id);
             const isHost = socket.id === room.hostId;
-            if (!isHost && room.permissions.allowDelete === false) {
+            if (!isHost && user && user.permissions.allowDelete === false) {
                 return socket.emit('error-msg', 'Deleting files disabled by host');
             }
             room.files = room.files.filter(f => f.id !== fileId);

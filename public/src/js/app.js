@@ -26,6 +26,7 @@ const userCountBadge = document.getElementById('user-count');
 const userCounterText = document.getElementById('user-counter-text');
 const activityList = document.getElementById('activity-list');
 const leaveBtn = document.getElementById('leave-btn');
+const shareBtn = document.getElementById('share-btn');
 const permEdit = document.getElementById('perm-edit');
 const permUpload = document.getElementById('perm-upload');
 const permDelete = document.getElementById('perm-delete');
@@ -41,6 +42,16 @@ let roomFiles = []; // Local cache for file content
 let isPadMode = false;
 let roomPassword = ''; // Store password for encryption
 let typingTimeout;
+
+// Check for Room ID in URL on load
+const urlParams = new URLSearchParams(window.location.search);
+const roomParam = urlParams.get('room');
+if (roomParam) {
+    const joinTab = document.querySelector('[data-tab="join"]');
+    if (joinTab) joinTab.click();
+    const joinInput = document.getElementById('join-room-id');
+    if (joinInput) joinInput.value = roomParam;
+}
 
 // --- Theme Initialization ---
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -114,22 +125,12 @@ function setupToolbar() {
     actionsDiv.className = 'nav-actions';
     
     const tools = [
-        { icon: '📥', title: 'Download as Text', action: () => {
-            const blob = new Blob([editor.value], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `shadowpad-${currentRoomId || 'doc'}.txt`;
-            a.click();
-        }},
-        { icon: '🔗', title: 'Copy Room ID', action: () => {
-            navigator.clipboard.writeText(currentRoomId).then(() => alert('Room ID copied!'));
+        { icon: '🔗', title: 'Copy Room Link', action: () => {
+            const link = `${window.location.origin}?room=${currentRoomId}`;
+            navigator.clipboard.writeText(link).then(() => alert('Room Link copied!'));
         }},
         { icon: '⚙️', title: 'Settings', action: () => {
             document.getElementById('settings-modal').classList.add('active');
-        }},
-        { icon: '🧹', title: 'Clear Editor', action: () => {
-            if(confirm('Clear all text?')) { editor.value = ''; editor.dispatchEvent(new Event('input')); }
         }}
     ];
 
@@ -472,6 +473,13 @@ function updateUserList(users) {
     if (isMeHost) document.body.classList.add('is-host');
     else document.body.classList.remove('is-host');
 
+    // Enforce local permissions based on "me"
+    if (me && !isMeHost) {
+        applyPermissions(me.permissions);
+    } else if (isMeHost) {
+        applyPermissions({ allowEdit: true, allowUpload: true, allowDelete: true });
+    }
+
     users.forEach(user => {
         const userInitial = user.name.charAt(0).toUpperCase();
         const li = document.createElement('li');
@@ -482,16 +490,32 @@ function updateUserList(users) {
         const youBadge = user.id === socket.id ? '<span class="user-tag">(You)</span>' : '';
         
         // Add Make Host button if I am host and this user is not me
+        // Also add Permission Toggles
         const promoteBtn = (isMeHost && !user.isHost) 
-            ? `<button class="user-action-btn promote-btn" data-id="${user.id}" title="Make Host" style="background:none;border:none;cursor:pointer;margin-left:auto;">⬆️</button>` 
+            ? `<button class="user-action-btn promote-btn" data-id="${user.id}" title="Make Host">⬆️</button>` 
             : '';
         
+        let permControls = '';
+        if (isMeHost && !user.isHost && user.permissions) {
+            permControls = `
+                <div class="user-perms">
+                    <button class="perm-btn ${user.permissions.allowEdit ? 'on' : 'off'}" data-action="toggle-perm" data-perm="allowEdit" data-id="${user.id}" title="Edit">✏️</button>
+                    <button class="perm-btn ${user.permissions.allowUpload ? 'on' : 'off'}" data-action="toggle-perm" data-perm="allowUpload" data-id="${user.id}" title="Upload">📤</button>
+                    <button class="perm-btn ${user.permissions.allowDelete ? 'on' : 'off'}" data-action="toggle-perm" data-perm="allowDelete" data-id="${user.id}" title="Delete">🗑️</button>
+                </div>
+            `;
+        }
+        
         li.innerHTML = `
-            <div class="user-avatar">${userInitial}</div>
-            <span class="user-name">${user.name}</span>
-            ${hostBadge}
-            ${youBadge}
-            ${promoteBtn}
+            <div class="user-info-row">
+                <div class="user-avatar">${userInitial}</div>
+                <span class="user-name">${user.name}</span>
+                ${hostBadge} ${youBadge}
+            </div>
+            <div class="user-actions-row">
+                ${permControls}
+                ${promoteBtn}
+            </div>
         `;
         userList.appendChild(li);
     });
@@ -508,6 +532,20 @@ userList.addEventListener('click', (e) => {
         if (confirm('Make this user the host? They will gain full control.')) {
             socket.emit('promote-host', { roomId: currentRoomId, userId });
         }
+    }
+
+    if (e.target.closest('.perm-btn')) {
+        const btn = e.target.closest('.perm-btn');
+        const userId = btn.dataset.id;
+        const perm = btn.dataset.perm;
+        const currentVal = btn.classList.contains('on');
+        
+        socket.emit('toggle-user-permission', { 
+            roomId: currentRoomId, 
+            userId: userId, 
+            permission: perm, 
+            value: !currentVal 
+        });
     }
 });
 
@@ -603,6 +641,14 @@ leaveBtn.addEventListener('click', () => {
         window.location.reload(); // Simple way to leave: just reload the page
     }
 });
+
+// Handle Share Button (Top Nav)
+if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+        const link = `${window.location.origin}?room=${currentRoomId}`;
+        navigator.clipboard.writeText(link).then(() => alert('Room Link copied!'));
+    });
+}
 
 // Handle Permissions
 permEdit.addEventListener('change', () => {

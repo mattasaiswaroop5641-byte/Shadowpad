@@ -117,6 +117,7 @@
 
     <script>
         let currentSecret = '';
+        let updateInterval;
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -131,6 +132,7 @@
                 document.getElementById('dashboard-view').style.display = 'block';
                 document.getElementById('active-view').style.display = 'block';
                 loadActiveUsers(secret);
+                startLiveUpdates();
             } catch (err) {
                 errorMsg.textContent = "Access Denied: Incorrect Secret";
                 errorMsg.style.display = 'block';
@@ -143,6 +145,7 @@
             document.getElementById('dashboard-view').style.display = 'none';
             document.getElementById('login-view').style.display = 'block';
             document.getElementById('active-view').style.display = 'none';
+            stopLiveUpdates();
         });
 
         document.getElementById('cleanup-btn').addEventListener('click', async () => {
@@ -171,6 +174,19 @@
             alert(data.message || data.error);
             loadPads();
         });
+
+        function startLiveUpdates() {
+            stopLiveUpdates();
+            // Poll every 2 seconds for live updates
+            updateInterval = setInterval(() => {
+                loadActiveUsers();
+                loadPads();
+            }, 2000);
+        }
+
+        function stopLiveUpdates() {
+            if (updateInterval) clearInterval(updateInterval);
+        }
 
         async function loadPads(secret = currentSecret) {
             const tbody = document.getElementById('pad-list');
