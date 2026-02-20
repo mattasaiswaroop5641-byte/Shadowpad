@@ -436,12 +436,22 @@ io.on('connection', (socket) => {
             const index = room.users.findIndex(u => u.id === socket.id);
             if (index !== -1) {
                 const user = room.users[index];
+                const wasHost = user.isHost;
                 room.users.splice(index, 1);
 
                 if (room.users.length === 0) {
                     delete rooms[roomId];
                     console.log(`Room ${roomId} deleted from memory (empty).`);
                 } else {
+                    if (wasHost) {
+                        const newHost = room.users[0];
+                        newHost.isHost = true;
+                        room.hostId = newHost.id;
+                        newHost.permissions = { allowEdit: true, allowUpload: true, allowDelete: true };
+
+                        io.to(newHost.id).emit('you-are-host');
+                        io.to(roomId).emit('activity-log', `${newHost.name} is now the host.`);
+                    }
                     io.to(roomId).emit('update-user-list', room.users);
                     io.to(roomId).emit('activity-log', `${user.name} left.`);
                 }
