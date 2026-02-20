@@ -47,6 +47,9 @@ const Pad = mongoose.model('Pad', PadSchema);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json()); // Crucial for parsing JSON body in POST requests
 
+// 3.1 Health Check Route (For Uptime Monitors & Render)
+app.get('/ping', (req, res) => res.status(200).send('pong'));
+
 // 4. API Route: Save Encrypted Pad
 app.post('/api/save-pad', async (req, res) => {
     try {
@@ -128,7 +131,8 @@ app.get('/api/pads', async (req, res) => {
                     size: { $cond: [{ $ifNull: ["$content", false] }, { $strLenCP: "$content" }, 0] } 
                 } 
             },
-            { $sort: { lastActive: -1 } }
+            { $sort: { lastActive: -1 } },
+            { $limit: 500 } // Optimization: Only load the last 500 active pads
         ]);
         res.json(pads);
     } catch (error) {
