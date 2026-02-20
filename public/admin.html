@@ -78,6 +78,21 @@
         </table>
     </div>
 
+    <!-- Active Users View -->
+    <div id="active-view" class="admin-container" style="display:none; margin-top: 2rem;">
+        <h2>🟢 Active Users (Real-time)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Room</th>
+                    <th>User</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="active-list"></tbody>
+        </table>
+    </div>
+
     <script>
         let currentSecret = '';
 
@@ -92,6 +107,8 @@
                 currentSecret = secret;
                 document.getElementById('login-view').style.display = 'none';
                 document.getElementById('dashboard-view').style.display = 'block';
+                document.getElementById('active-view').style.display = 'block';
+                loadActiveUsers(secret);
             } catch (err) {
                 errorMsg.textContent = "Access Denied: Incorrect Secret";
                 errorMsg.style.display = 'block';
@@ -103,6 +120,7 @@
             document.getElementById('admin-secret').value = '';
             document.getElementById('dashboard-view').style.display = 'none';
             document.getElementById('login-view').style.display = 'block';
+            document.getElementById('active-view').style.display = 'none';
         });
 
         async function loadPads(secret = currentSecret) {
@@ -142,9 +160,48 @@
             await fetch('/api/delete-pad', {
                 method: 'DELETE',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ roomId })
+                body: JSON.stringify({ roomId, secret: currentSecret })
             });
             loadPads(); // Refresh list
+        }
+
+        async function loadActiveUsers(secret = currentSecret) {
+            const tbody = document.getElementById('active-list');
+            try {
+                const res = await fetch(`/api/active-rooms?secret=${encodeURIComponent(secret)}`);
+                const rooms = await res.json();
+
+                if (rooms.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No active users online.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                rooms.forEach(room => {
+                    room.users.forEach(user => {
+                        html += `
+                            <tr>
+                                <td><span class="badge">${room.roomId}</span></td>
+                                <td>${user.name} ${user.isHost ? '👑' : ''} <span style="font-size:0.8em; opacity:0.5">(${user.id})</span></td>
+                                <td><button class="btn-danger" onclick="kickUser('${user.id}')">Kick</button></td>
+                            </tr>
+                        `;
+                    });
+                });
+                tbody.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function kickUser(socketId) {
+            if(!confirm("Kick this user?")) return;
+            await fetch('/api/kick-user', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ socketId, secret: currentSecret })
+            });
+            setTimeout(loadActiveUsers, 500); // Refresh list
         }
     </script>
 </body>

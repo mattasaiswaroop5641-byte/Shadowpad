@@ -13,11 +13,16 @@ const rooms = {}; // In-memory state for active rooms
 
 // 1. MongoDB Connection
 // Ensure you have MongoDB running locally or use a cloud URI
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/shadowpad';
+// 💡 TIP: Paste your MongoDB Atlas connection string below if running locally without a local DB
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Admin:Mgsai1042@cluster0.iygxgom.mongodb.net/shadowpad?appName=Cluster0';
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log('✅ MongoDB Connected'))
-    .catch(err => console.error('❌ MongoDB Error:', err));
+    .catch(err => {
+        console.error('❌ MongoDB Connection Error:', err.codeName || err.message);
+        console.log('👉 If you are running locally, make sure MongoDB Community Server is started.');
+        console.log('👉 If you want to use Cloud DB, set MONGO_URI in your environment or replace the string in server.js.');
+    });
 
 // 2. Define Pad Schema
 const PadSchema = new mongoose.Schema({
@@ -58,7 +63,9 @@ app.post('/api/save-pad', async (req, res) => {
 // 4.1 API Route: Delete Pad
 app.delete('/api/delete-pad', async (req, res) => {
     try {
-        const { roomId } = req.body;
+        const { roomId, secret } = req.body;
+        
+        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
         if (!roomId) return res.status(400).json({ error: 'Room ID required' });
 
         await Pad.findOneAndDelete({ roomId });
@@ -75,14 +82,42 @@ app.delete('/api/delete-pad', async (req, res) => {
 // 4.2 API Route: Get All Pads (Admin Dashboard)
 app.get('/api/pads', async (req, res) => {
     try {
-        // Simple security check (Use ?secret=Mgsai@1042 in URL)
-        if (req.query.secret !== 'Mgsai@1042') {
+        // Simple security check (Use ?secret=Mgsai1042 in URL)
+        if (req.query.secret !== 'Mgsai1042') {
             return res.status(403).json({ error: 'Unauthorized access' });
         }
         const pads = await Pad.find().sort({ lastActive: -1 });
         res.json(pads);
     } catch (error) {
         res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// 4.3 API Route: Get Active Rooms & Users (Memory)
+app.get('/api/active-rooms', (req, res) => {
+    if (req.query.secret !== 'Mgsai1042') {
+        return res.status(403).json({ error: 'Unauthorized access' });
+    }
+    // Convert rooms object to array
+    const activeData = Object.values(rooms).map(r => ({
+        roomId: r.id,
+        users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost }))
+    }));
+    res.json(activeData);
+});
+
+// 4.4 API Route: Kick (Ban) User
+app.post('/api/kick-user', (req, res) => {
+    const { socketId, secret } = req.body;
+    if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+        socket.emit('error-msg', 'You have been kicked by the admin.');
+        socket.disconnect(true);
+        res.json({ success: true, message: 'User kicked' });
+    } else {
+        res.status(404).json({ error: 'User not found or already disconnected' });
     }
 });
 
@@ -176,4 +211,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Admin Panel: http://localhost:${PORT}/admin.html`);
+});
