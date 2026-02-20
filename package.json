@@ -1,36 +1,17 @@
 {
   "name": "shadowpad",
   "version": "1.0.0",
-  "description": "A real-time, end-to-end encrypted collaborative workspace.",
+  "description": "Secure Collaborative Workspace",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "socket.io": "^4.7.2"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "keywords": [
-    "collaboration",
-    "real-time",
-    "socket.io",
-    "encrypted",
-    "workspace"
-  ],
-  "author": "M.G.Sai Swarup",
-  "license": "MIT",
-  "dependencies": {
-    "express": "^4.22.1",
-    "mongoose": "^9.2.1",
-    "socket.io": "^4.8.3"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mattasaiswaroop5641-byte/Shadowpad.git"
-  },
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/mattasaiswaroop5641-byte/Shadowpad/issues"
-  },
-  "homepage": "https://github.com/mattasaiswaroop5641-byte/Shadowpad#readme"
+  }
 }

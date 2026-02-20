@@ -59,9 +59,11 @@
                             </div>
                         
                             <div class="input-group">
-                                <label>Max Users (2-20)</label>
-                                <input type="range" id="max-users" min="2" max="20" value="10">
-                                <span class="range-value">10 users</span>
+                                <label style="display:flex; justify-content:space-between;">
+                                    <span>Max Users</span>
+                                    <span id="room-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
+                                </label>
+                                <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;" oninput="document.getElementById('room-max-users-val').textContent = this.value">
                             </div>
                         
                             <button type="submit" class="btn btn-primary">Create Secure Room</button>
@@ -94,7 +96,7 @@
                         <div class="security-badges">
                             <span>🔐 AES-256 Encryption</span>
                             <span>🌐 P2P Network</span>
-                            <span>👥 Up to 20 Users</span>
+                            <span>👥 Up to 60 Users</span>
                         </div>
                     </footer>
                 </div>

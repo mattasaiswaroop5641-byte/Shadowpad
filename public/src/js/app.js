@@ -320,34 +320,6 @@ function injectStyleSwitcher() {
 }
 injectStyleSwitcher();
 
-// Inject Slider into Room Creation Form
-function injectRoomSlider() {
-    const form = document.getElementById('create-form');
-    if (!form) return;
-    if (document.getElementById('room-max-users')) return;
-
-    const html = `
-        <div class="input-group">
-            <label style="display:flex; justify-content:space-between;">
-                <span>Max Users</span>
-                <span id="room-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
-            </label>
-            <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;">
-        </div>
-    `;
-    
-    const btn = form.querySelector('button[type="submit"]');
-    if (btn) btn.insertAdjacentHTML('beforebegin', html);
-    else form.insertAdjacentHTML('beforeend', html);
-
-    const slider = document.getElementById('room-max-users');
-    const display = document.getElementById('room-max-users-val');
-    if(slider && display) {
-        slider.addEventListener('input', (e) => display.textContent = e.target.value);
-    }
-}
-injectRoomSlider();
-
 // Handle Creating a Room
 createForm.addEventListener('submit', (e) => {
     e.preventDefault();
