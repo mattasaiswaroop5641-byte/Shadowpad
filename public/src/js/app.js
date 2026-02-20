@@ -7,6 +7,12 @@ if (!window.CryptoJS) {
 
 const socket = io();
 
+// Hide loading screen when connected
+socket.on('connect', () => {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+});
+
 // Element Selectors from your HTML
 const authModule = document.getElementById('auth-module');
 const appModule = document.getElementById('app-module');
