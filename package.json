@@ -20,7 +20,17 @@
   "author": "M.G.Sai Swarup",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  }
+    "express": "^4.22.1",
+    "mongoose": "^9.2.1",
+    "socket.io": "^4.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattasaiswaroop5641-byte/Shadowpad.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mattasaiswaroop5641-byte/Shadowpad/issues"
+  },
+  "homepage": "https://github.com/mattasaiswaroop5641-byte/Shadowpad#readme"
 }
