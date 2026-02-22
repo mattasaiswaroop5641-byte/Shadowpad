@@ -20,6 +20,7 @@ const userCounterText = document.getElementById('user-counter-text');
 const activityList = document.getElementById('activity-list');
 const leaveBtn = document.getElementById('leave-btn');
 const shareBtn = document.getElementById('share-btn');
+const settingsBtn = document.getElementById('settings-btn');
 const permEdit = document.getElementById('perm-edit');
 const permUpload = document.getElementById('perm-upload');
 const permDelete = document.getElementById('perm-delete');
@@ -901,6 +902,13 @@ if (shareBtn) {
     shareBtn.addEventListener('click', () => {
         const link = `${window.location.origin}?room=${currentRoomId}`;
         navigator.clipboard.writeText(link).then(() => alert('Room Link copied!'));
+    });
+}
+
+// Handle Settings Button (Top Nav)
+if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+        document.getElementById('settings-modal').classList.add('active');
     });
 }
 

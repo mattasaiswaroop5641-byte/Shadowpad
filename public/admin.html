@@ -98,6 +98,10 @@
             </div>
         </div>
 
+        <div style="margin-bottom: 1rem;">
+            <input type="text" id="search-input" class="login-input" placeholder="🔍 Search Room ID..." style="width: 100%; max-width: 300px;">
+        </div>
+
         <table>
             <thead>
                 <tr>
@@ -134,6 +138,7 @@
     <script>
         let currentSecret = '';
         let updateInterval;
+        let searchTerm = '';
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -189,6 +194,7 @@
             const data = await res.json();
             alert(data.message || data.error);
             loadPads();
+            loadActiveUsers();
         });
 
         function startLiveUpdates() {
@@ -202,6 +208,15 @@
 
         function stopLiveUpdates() {
             if (updateInterval) clearInterval(updateInterval);
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         }
 
         async function loadPads(secret = currentSecret) {
@@ -223,8 +238,7 @@
                 // Update Stats
                 document.getElementById('total-pads').textContent = pads.length;
                 const totalBytes = pads.reduce((acc, pad) => acc + (pad.size || 0), 0);
-                const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
-                document.getElementById('total-size').textContent = `${totalMB} MB`;
+                document.getElementById('total-size').textContent = formatBytes(totalBytes);
 
                 tbody.innerHTML = pads.map(pad => {
                     const lastActive = new Date(pad.lastActive);
@@ -242,12 +256,14 @@
                         <td><span class="badge">${pad.roomId}</span></td>
                         <td>${lastActive.toLocaleString()}</td>
                         <td><span class="badge" style="${badgeStyle}">${daysRemaining} days</span></td>
-                        <td>${pad.size} chars</td>
+                        <td>${formatBytes(pad.size)}</td>
                         <td>
                             <button class="btn-danger" onclick="deletePad('${pad.roomId.replace(/'/g, "\\'")}')">Delete</button>
                         </td>
                     </tr>
                 `}).join('');
+
+                if (searchTerm) filterPads();
             } catch (e) {
                 tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#ef4444">Error: ${e.message}</td></tr>`;
             }
@@ -262,6 +278,22 @@
                 body: JSON.stringify({ roomId, secret: currentSecret })
             });
             loadPads(); // Refresh list
+        }
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            searchTerm = e.target.value.toLowerCase();
+            filterPads();
+        });
+
+        function filterPads() {
+            const rows = document.querySelectorAll('#pad-list tr');
+            rows.forEach(row => {
+                const badge = row.querySelector('.badge');
+                if (badge) {
+                    const roomId = badge.textContent.toLowerCase();
+                    row.style.display = roomId.includes(searchTerm) ? '' : 'none';
+                }
+            });
         }
 
         async function loadActiveUsers(secret = currentSecret) {
