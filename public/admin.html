@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowPad Admin</title>
+    <link rel="stylesheet" href="src/css/main.css">
+    <style>
+        body { overflow: auto; padding: 2rem; background-color: #0f172a; color: #fff; }
+        .admin-container { max-width: 1000px; margin: 0 auto; }
+        
+        h1 { margin-bottom: 0.5rem; color: #818cf8; }
+        p { color: #94a3b8; margin-bottom: 2rem; }
+
+        table { width: 100%; border-collapse: collapse; background: rgba(30, 41, 59, 0.5); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { background: rgba(30, 41, 59, 0.8); color: #818cf8; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; background: #334155; color: #cbd5e1; font-family: monospace; }
+        
+        .btn-danger { 
+            background: rgba(239, 68, 68, 0.1); 
+            color: #ef4444; 
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        .empty-state { text-align: center; padding: 3rem; color: #64748b; font-style: italic; }
+
+        /* Login Styles */
+        .login-container { max-width: 400px; margin: 100px auto; text-align: center; background: rgba(30, 41, 59, 0.5); padding: 2rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); }
+        .login-input { width: 100%; padding: 12px; margin-bottom: 1rem; background: rgba(15, 23, 42, 0.8); border: 1px solid #334155; color: white; border-radius: 8px; outline: none; }
+        .login-input:focus { border-color: #818cf8; }
+        .btn-primary { background: #6366f1; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s; }
+        .btn-primary:hover { background: #818cf8; }
+        #dashboard-view { display: none; }
+        .error-msg { color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none; }
+
+        /* Stats Bar */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: rgba(15, 23, 42, 0.6); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .stat-label { color: #94a3b8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: block; }
+        .stat-value { font-size: 2rem; font-weight: 800; color: white; }
+        .stat-value.green { color: #34d399; }
+        .stat-value.blue { color: #60a5fa; }
+        .stat-value.orange { color: #fbbf24; }
+
+        /* Room Cards */
+        .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+        .room-card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; overflow: hidden; }
+        .room-header { background: rgba(15, 23, 42, 0.6); padding: 1rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .room-title { font-weight: 700; color: #818cf8; font-family: monospace; font-size: 1.1rem; }
+        .room-users { list-style: none; padding: 0; margin: 0; }
+        .room-users li { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s; }
+        .room-users li:hover { background: rgba(255,255,255,0.02); }
+        .room-users li:last-child { border-bottom: none; }
+        .user-info { display: flex; align-items: center; gap: 8px; }
+        .user-id { font-size: 0.75rem; color: #64748b; font-family: monospace; }
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+    <!-- Login View -->
+    <div id="login-view" class="login-container">
+        <h1>🔐 Admin Login</h1>
+        <p>Enter admin secret to continue</p>
+        <form id="login-form">
+            <input type="password" id="admin-secret" class="login-input" placeholder="Admin Secret" required>
+            <button type="submit" class="btn-primary">Access Dashboard</button>
+            <p id="login-error" class="error-msg"></p>
+        </form>
+    </div>
+
+    <!-- Dashboard View -->
+    <div id="dashboard-view" class="admin-container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>🛡️ ShadowPad Admin</h1>
+            <button id="cleanup-btn" class="btn-danger" style="background: rgba(234, 179, 8, 0.1); color: #facc15; border-color: rgba(234, 179, 8, 0.2); margin-right: 10px;">🧹 Clean Old Data</button>
+            <button id="nuke-btn" class="btn-danger" style="background: rgba(220, 38, 38, 0.2); color: #fca5a5; border-color: rgba(220, 38, 38, 0.4); margin-right: 10px;">☢️ Drop DB</button>
+            <button id="logout-btn" class="btn-danger">Logout</button>
+        </div>
+        
+        <!-- Stats Dashboard -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Total Pads</span>
+                <span id="total-pads" class="stat-value blue">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Total Storage</span>
+                <span id="total-size" class="stat-value orange">0 MB</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <input type="text" id="search-input" class="login-input" placeholder="🔍 Search Room ID..." style="width: 100%; max-width: 300px;">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Room ID</th>
+                    <th>Last Active</th>
+                    <th>Days Remaining</th>
+                    <th>Encrypted Size</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="pad-list">
+                <!-- Rows injected here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Active Users View -->
+    <div id="active-view" class="admin-container" style="display:none; margin-top: 2rem;">
+        <h2>🟢 Active Sessions</h2>
+        
+        <div style="margin-bottom: 3rem;">
+            <h3 style="color: #818cf8; border-bottom: 1px solid rgba(129, 140, 248, 0.2); padding-bottom: 10px; margin-bottom: 15px;">👥 Active Rooms</h3>
+            <div id="active-rooms-list" class="room-grid"></div>
+            <p id="no-rooms-msg" class="empty-state" style="display:none; padding: 1rem;">No active rooms.</p>
+        </div>
+
+        <div>
+            <h3 style="color: #fbbf24; border-bottom: 1px solid rgba(251, 191, 36, 0.2); padding-bottom: 10px; margin-bottom: 15px;">📝 Active Notepads</h3>
+            <div id="active-notepads-list" class="room-grid"></div>
+            <p id="no-notepads-msg" class="empty-state" style="display:none; padding: 1rem;">No active notepads.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentSecret = '';
+        let updateInterval;
+        let searchTerm = '';
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const secret = document.getElementById('admin-secret').value;
+            const errorMsg = document.getElementById('login-error');
+            
+            try {
+                await loadPads(secret);
+                // If successful:
+                currentSecret = secret;
+                document.getElementById('login-view').style.display = 'none';
+                document.getElementById('dashboard-view').style.display = 'block';
+                document.getElementById('active-view').style.display = 'block';
+                loadActiveUsers(secret);
+                startLiveUpdates();
+            } catch (err) {
+                errorMsg.textContent = "Access Denied: Incorrect Secret";
+                errorMsg.style.display = 'block';
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            currentSecret = '';
+            document.getElementById('admin-secret').value = '';
+            document.getElementById('dashboard-view').style.display = 'none';
+            document.getElementById('login-view').style.display = 'block';
+            document.getElementById('active-view').style.display = 'none';
+            stopLiveUpdates();
+        });
+
+        document.getElementById('cleanup-btn').addEventListener('click', async () => {
+            const days = prompt("Delete pads inactive for how many days?", "30");
+            if (!days) return;
+            
+            const res = await fetch('/api/cleanup-pads', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ secret: currentSecret, days: parseInt(days) })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadPads();
+        });
+
+        document.getElementById('nuke-btn').addEventListener('click', async () => {
+            if (!confirm("⚠️ DANGER: This will delete ALL data in the current database. Are you sure?")) return;
+            
+            const res = await fetch('/api/drop-database', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ secret: currentSecret })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadPads();
+            loadActiveUsers();
+        });
+
+        function startLiveUpdates() {
+            stopLiveUpdates();
+            // Poll every 2 seconds for live updates
+            updateInterval = setInterval(() => {
+                loadActiveUsers();
+                loadPads();
+            }, 2000);
+        }
+
+        function stopLiveUpdates() {
+            if (updateInterval) clearInterval(updateInterval);
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        async function loadPads(secret = currentSecret) {
+            const tbody = document.getElementById('pad-list');
+            try {
+                const res = await fetch(`/api/pads?secret=${encodeURIComponent(secret)}`);
+                if (!res.ok) {
+                    // Attempt to read error message from server
+                    const errText = await res.text(); 
+                    throw new Error(`Status ${res.status}: ${errText}`);
+                }
+                const pads = await res.json();
+
+                if (pads.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pads found in database.</td></tr>';
+                    return;
+                }
+
+                // Update Stats
+                document.getElementById('total-pads').textContent = pads.length;
+                const totalBytes = pads.reduce((acc, pad) => acc + (pad.size || 0), 0);
+                document.getElementById('total-size').textContent = formatBytes(totalBytes);
+
+                tbody.innerHTML = pads.map(pad => {
+                    const lastActive = new Date(pad.lastActive);
+                    const expiryDate = new Date(lastActive.getTime() + (30 * 24 * 60 * 60 * 1000));
+                    const now = new Date();
+                    const diffTime = expiryDate - now;
+                    const daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                    
+                    let badgeStyle = 'background:#10b981; color:#000'; // Green
+                    if (daysRemaining <= 3) badgeStyle = 'background:#ef4444; color:#fff'; // Red
+                    else if (daysRemaining <= 7) badgeStyle = 'background:#f59e0b; color:#000'; // Orange
+
+                    return `
+                    <tr>
+                        <td><span class="badge">${pad.roomId}</span></td>
+                        <td>${lastActive.toLocaleString()}</td>
+                        <td><span class="badge" style="${badgeStyle}">${daysRemaining} days</span></td>
+                        <td>${formatBytes(pad.size)}</td>
+                        <td>
+                            <button class="btn-danger" onclick="deletePad('${pad.roomId.replace(/'/g, "\\'")}')">Delete</button>
+                        </td>
+                    </tr>
+                `}).join('');
+
+                if (searchTerm) filterPads();
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#ef4444">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        async function deletePad(roomId) {
+            if(!confirm(`Are you sure you want to delete the pad "${roomId}"? This cannot be undone.`)) return;
+            
+            await fetch('/api/delete-pad', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ roomId, secret: currentSecret })
+            });
+            loadPads(); // Refresh list
+        }
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            searchTerm = e.target.value.toLowerCase();
+            filterPads();
+        });
+
+        function filterPads() {
+            const rows = document.querySelectorAll('#pad-list tr');
+            rows.forEach(row => {
+                const badge = row.querySelector('.badge');
+                if (badge) {
+                    const roomId = badge.textContent.toLowerCase();
+                    row.style.display = roomId.includes(searchTerm) ? '' : 'none';
+                }
+            });
+        }
+
+        async function loadActiveUsers(secret = currentSecret) {
+            const roomsContainer = document.getElementById('active-rooms-list');
+            const notepadsContainer = document.getElementById('active-notepads-list');
+            const noRoomsMsg = document.getElementById('no-rooms-msg');
+            const noNotepadsMsg = document.getElementById('no-notepads-msg');
+
+            try {
+                const res = await fetch(`/api/active-rooms?secret=${encodeURIComponent(secret)}`);
+                if (!res.ok) throw new Error('Failed to fetch active users');
+                const allSessions = await res.json();
+
+                const rooms = allSessions.filter(r => r.type !== 'notepad');
+                const notepads = allSessions.filter(r => r.type === 'notepad');
+
+                const renderCards = (list) => {
+                    return list.map(room => {
+                        // Sort users: Host first
+                        room.users.sort((a, b) => (b.isHost ? 1 : 0) - (a.isHost ? 1 : 0));
+                        const typeLabel = room.type === 'notepad' ? 'Notepad' : 'Room';
+                        const cleanName = (room.roomName || room.roomId).replace(/^(ROOM:|NOTE:)/, '');
+                        const displayTitle = `${typeLabel}: ${cleanName}`;
+
+                        return `
+                        <div class="room-card">
+                            <div class="room-header">
+                                <span class="room-title" style="color: ${room.type === 'notepad' ? '#fbbf24' : '#818cf8'}">${displayTitle}</span>
+                                <span class="badge">${room.users.length} users</span>
+                            </div>
+                            <ul class="room-users">
+                                ${room.users.map(user => `
+                                    <li>
+                                        <div class="user-info">
+                                            <span>${user.name} ${user.isHost ? '<span style="color:#fbbf24; font-weight:bold; margin-left:4px;">(Host)</span>' : ''}</span>
+                                            <span class="user-id">(${user.id.substr(0, 6)}...)</span>
+                                        </div>
+                                        <button class="btn-danger btn-sm" onclick="kickUser('${user.id}')">Kick</button>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        `;
+                    }).join('');
+                };
+
+                if (rooms.length > 0) {
+                    roomsContainer.innerHTML = renderCards(rooms);
+                    noRoomsMsg.style.display = 'none';
+                } else {
+                    roomsContainer.innerHTML = '';
+                    noRoomsMsg.style.display = 'block';
+                }
+                
+                if (notepads.length > 0) {
+                    notepadsContainer.innerHTML = renderCards(notepads);
+                    noNotepadsMsg.style.display = 'none';
+                } else {
+                    notepadsContainer.innerHTML = '';
+                    noNotepadsMsg.style.display = 'block';
+                }
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function kickUser(socketId) {
+            if(!confirm("Kick this user?")) return;
+            await fetch('/api/kick-user', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ socketId, secret: currentSecret })
+            });
+            setTimeout(loadActiveUsers, 500); // Refresh list
+        }
+    </script>
+</body>
+</html>

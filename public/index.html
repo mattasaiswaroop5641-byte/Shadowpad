@@ -1,0 +1,281 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="ShadowPad - End-to-End Encrypted Collaborative Workspace">
+        <title>ShadowPad | Secure Collaboration</title>
+    
+        <link rel="preload" href="src/css/main.css" as="style">
+        <link rel="stylesheet" href="src/css/variables.css">
+        <link rel="stylesheet" href="src/css/main.css">
+        <link rel="stylesheet" href="src/css/components.css">
+        <link rel="stylesheet" href="src/css/responsive.css">
+    </head>
+    <body>
+        <div class="bg-grid"></div>
+        <div class="bg-glow"></div>
+    
+        <div id="app">
+            <!-- AUTH MODULE -->
+            <section id="auth-module" class="module active">
+                <div class="auth-container">
+                    <header class="auth-header">
+                        <div class="logo">
+                            <span class="logo-icon">🔒</span>
+                            <h1>ShadowPad</h1>
+                        </div>
+                        <p class="tagline">End-to-End Encrypted Collaboration</p>
+                    </header>
+                
+                    <div class="auth-card">
+                        <nav class="auth-tabs">
+                            <button class="tab-btn active" data-tab="create">Create Room</button>
+                            <button class="tab-btn" data-tab="join">Join Room</button>
+                        </nav>
+                    
+                        <form id="create-form" class="auth-form active">
+                            <div class="input-group">
+                                <label>Room Name</label>
+                                <input type="text" id="room-name" placeholder="e.g., Project Alpha" required>
+                            </div>
+                        
+                            <div class="input-group">
+                                <label>Password (Min 8 chars)</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="create-password" placeholder="Strong encryption key" minlength="8" required>
+                                    <button type="button" class="toggle-password">👁️</button>
+                                </div>
+                                <div class="password-strength">
+                                    <div class="strength-bar"></div>
+                                    <span class="strength-text">Enter password</span>
+                                </div>
+                            </div>
+                        
+                            <div class="input-group">
+                                <label>Your Name</label>
+                                <input type="text" id="owner-name" placeholder="Display name" required>
+                            </div>
+                        
+                            <div class="input-group">
+                                <label style="display:flex; justify-content:space-between;">
+                                    <span>Max Users</span>
+                                    <span id="room-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
+                                </label>
+                                <input type="range" id="room-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;" oninput="document.getElementById('room-max-users-val').textContent = this.value">
+                            </div>
+                        
+                            <button type="submit" class="btn btn-primary">Create Secure Room</button>
+                        </form>
+                    
+                        <form id="join-form" class="auth-form">
+                            <div class="input-group">
+                                <label>Room ID</label>
+                                <input type="text" id="join-room-id" placeholder="Paste room ID" required>
+                            </div>
+                        
+                            <div class="input-group">
+                                <label>Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="join-password" placeholder="Room password" required>
+                                    <button type="button" class="toggle-password">👁️</button>
+                                </div>
+                            </div>
+                        
+                            <div class="input-group">
+                                <label>Your Name</label>
+                                <input type="text" id="join-name" placeholder="Display name" required>
+                            </div>
+                        
+                            <button type="submit" class="btn btn-primary">Join Room</button>
+                        </form>
+                    </div>
+                
+                    <footer class="auth-footer">
+                        <div class="security-badges">
+                            <span>🔐 AES-256 Encryption</span>
+                            <span>🌐 P2P Network</span>
+                            <span>👥 Up to 60 Users</span>
+                        </div>
+                        <div style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.7;">
+                            &copy; 2026 M.G. Sai Swarup. All Rights Reserved.
+                        </div>
+                    </footer>
+                </div>
+            </section>
+        
+            <!-- APP MODULE -->
+            <section id="app-module" class="module">
+                <nav class="top-nav">
+                    <div class="nav-brand">
+                        <span class="logo-icon">🔒</span>
+                        <span class="room-name">Room</span>
+                    </div>
+                
+                    <div class="nav-center">
+                        <div class="connection-status">
+                            <span class="status-dot"></span>
+                            <span class="status-text">Connected</span>
+                        </div>
+                        <div class="user-counter">
+                            <span>👥</span>
+                            <span id="user-counter-text">1/20</span>
+                        </div>
+                    </div>
+                
+                    <div class="nav-actions">
+                        <button class="nav-btn" id="share-btn" title="Share">🔗</button>
+                        <button class="nav-btn" id="settings-btn" title="Settings">⚙️</button>
+                        <button class="nav-btn danger" id="leave-btn" title="Leave">🚪</button>
+                    </div>
+                </nav>
+            
+                <main class="workspace">
+                    <!-- LEFT SIDEBAR -->
+                    <aside class="sidebar sidebar-left">
+                        <div class="sidebar-section">
+                            <h3 class="section-title">
+                                <span>Active Users</span>
+                                <span class="badge" id="user-count">1</span>
+                            </h3>
+                            <ul class="user-list" id="user-list"></ul>
+                        </div>
+                    
+                        <div class="sidebar-section">
+                            <h3 class="section-title">Activity</h3>
+                            <ul class="activity-list" id="activity-list"></ul>
+                        </div>
+                    
+                        <div class="sidebar-section room-info">
+                            <h3 class="section-title">Room Info</h3>
+                            <div class="info-card">
+                                <div class="info-row">
+                                    <span class="info-label">ID:</span>
+                                    <code id="room-id-display">-</code>
+                                    <button class="copy-btn" onclick="copyToClipboard('room-id-display')">📋</button>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Encryption:</span>
+                                    <span class="secure-badge">AES-256-GCM ✓</span>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                
+                    <!-- CENTER EDITOR -->
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <div class="toolbar-group">
+                                <button class="tool-btn" data-action="bold" title="Bold">𝐁</button>
+                                <button class="tool-btn" data-action="italic" title="Italic">𝐼</button>
+                                <button class="tool-btn" data-action="code" title="Code">&lt;/&gt;</button>
+                            </div>
+                            <div class="toolbar-group">
+                                <button class="tool-btn" data-action="download" title="Download">📥</button>
+                                <button class="tool-btn" data-action="clear" title="Clear">🗑️</button>
+                            </div>
+                            <div class="toolbar-info">
+                                <span id="sync-status">🔒 Encrypted</span>
+                            </div>
+                        </div>
+                    
+                        <div class="editor-wrapper">
+                            <textarea id="main-editor" placeholder="Start typing...\n\nOnly users with the password can read this."></textarea>
+                        </div>
+                    
+                        <div class="editor-status">
+                            <span id="char-count">0 chars</span>
+                            <span id="word-count">0 words</span>
+                        </div>
+                    </div>
+                
+                    <!-- RIGHT SIDEBAR -->
+                    <aside class="sidebar sidebar-right">
+                        <div class="sidebar-section">
+                            <h3 class="section-title">
+                                <span>Files</span>
+                                <span class="badge" id="file-count">0</span>
+                            </h3>
+                            <ul class="file-list" id="file-list"></ul>
+                        </div>
+                    
+                        <div class="upload-zone" id="upload-zone">
+                            <div class="upload-prompt">
+                                <span class="upload-icon">📤</span>
+                                <p>Drop files here</p>
+                                <small>Max 25MB • Encrypted</small>
+                            </div>
+                            <input type="file" id="file-input" multiple hidden>
+                        </div>
+                    
+                        <div class="sidebar-section" id="permissions-panel">
+                            <h3 class="section-title">Permissions</h3>
+                            <label class="permission-item">
+                                <span>Allow edit</span>
+                                <input type="checkbox" id="perm-edit" checked>
+                                <span class="toggle"></span>
+                            </label>
+                            <label class="permission-item">
+                                <span>Allow upload</span>
+                                <input type="checkbox" id="perm-upload" checked>
+                                <span class="toggle"></span>
+                            </label>
+                            <label class="permission-item">
+                                <span>Allow delete</span>
+                                <input type="checkbox" id="perm-delete">
+                                <span class="toggle"></span>
+                            </label>
+                            <button id="grant-all-btn" class="btn btn-primary" style="width:100%; margin-top:12px; font-size:0.8rem; padding:8px;">Grant All Access</button>
+                        </div>
+                    </aside>
+                </main>
+            </section>
+        </div>
+    
+        <!-- SHARE MODAL -->
+        <div class="modal" id="share-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔗 Share Room</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Share Room ID and password securely:</p>
+                    <div class="share-box">
+                        <div class="share-field">
+                            <label>Room ID</label>
+                            <div class="copy-field">
+                                <code id="share-room-id">-</code>
+                                <button class="btn-copy" onclick="copyToClipboard('share-room-id')">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="security-notice">
+                        ⚠️ Share password separately via secure channel!
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+        <!-- TOAST CONTAINER -->
+        <div class="toast-container" id="toast-container"></div>
+    
+        <!-- LOADING OVERLAY -->
+        <div class="loading-overlay" id="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p>Establishing secure connection...</p>
+        </div>
+    
+        <script src="/socket.io/socket.io.js"></script>
+        <script type="module" src="src/js/app.js"></script>
+        <script>
+            function copyToClipboard(elementId) {
+                const text = document.getElementById(elementId).textContent;
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Copied: ' + text);
+                });
+            }
+        </script>
+    </body>
+    </html>

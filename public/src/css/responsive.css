@@ -1,0 +1,285 @@
+/* Responsive Design & Mobile Adaptations */
+
+/* Tablet Breakpoint */
+@media (max-width: 1024px) {
+    .workspace {
+        grid-template-columns: 240px 1fr 240px;
+    }
+    
+    .sidebar {
+        --sidebar-width: 240px;
+    }
+    
+    .section-title {
+        font-size: 0.75rem;
+    }
+    
+    .user-item {
+        padding: var(--space-xs);
+    }
+    
+    .user-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+    
+    .user-name {
+        font-size: 0.8rem;
+    }
+    
+    .toolbar-info {
+        display: none;
+    }
+}
+
+/* Mobile Breakpoint */
+@media (max-width: 768px) {
+    :root {
+        --sidebar-width: 100%;
+        --nav-height: 56px;
+    }
+
+    #auth-module {
+        padding: var(--space-md);
+        align-items: flex-start;
+        padding-top: var(--space-xl);
+    }
+
+    .auth-container {
+        max-width: 100%;
+    }
+
+    .logo h1 {
+        font-size: 1.75rem;
+    }
+
+    .auth-card {
+        padding: var(--space-lg);
+    }
+
+    .auth-tabs {
+        flex-direction: column;
+    }
+
+    .security-badges {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+
+    .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+    }
+
+    .sidebar-left, .sidebar-right {
+        max-height: 200px;
+        display: block; /* Override main.css display:none for mobile stack layout */
+        overflow-y: auto;
+    }
+
+    .top-nav {
+        padding: 0 var(--space-md);
+    }
+
+    .nav-brand .room-name {
+        display: none;
+    }
+
+    .connection-status .status-text {
+        display: none;
+    }
+
+    .editor-toolbar {
+        padding: 0 var(--space-md);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #main-editor {
+        padding: var(--space-md);
+        font-size: 16px;
+    }
+
+    .modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal-content {
+        max-width: 100%;
+        max-height: 90vh;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .toast-container {
+        left: var(--space-md);
+        right: var(--space-md);
+        bottom: var(--space-md);
+        top: auto;
+        flex-direction: column-reverse;
+    }
+
+    .user-item {
+        padding: var(--space-xs);
+    }
+
+    .sidebar-section {
+        padding: var(--space-md);
+    }
+}
+
+/* Reduced Motion Preference */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .bg-grid,
+    .bg-glow {
+        animation: none;
+    }
+    
+    .status-dot {
+        animation: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .bg-grid,
+    .bg-glow,
+    .top-nav,
+    .sidebar,
+    .editor-toolbar,
+    .editor-status {
+        display: none !important;
+    }
+    
+    #app-module {
+        display: block;
+    }
+    
+    .editor-container {
+        background: white;
+        color: black;
+    }
+    
+    #main-editor {
+        color: black;
+        background: white;
+        border: none;
+        resize: none;
+    }
+}
+
+/* Very Large Screens */
+@media (min-width: 1920px) {
+    :root {
+        --sidebar-width: 320px;
+    }
+    
+    #main-editor {
+        font-size: 16px;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+}
+
+/* Ultrawide Screens */
+@media (min-width: 2560px) {
+    .workspace {
+        grid-template-columns: 360px 1fr 360px;
+    }
+}
+
+/* Host Permissions & Badges */
+.user-tag.host {
+    background: transparent;
+    font-size: 1.2em;
+    padding: 0 4px;
+    border: none;
+}
+
+/* Hide permissions panel by default (for participants) */
+#permissions-panel {
+    display: none;
+}
+
+/* Show permissions panel only when body has is-host class */
+body.is-host #permissions-panel {
+    display: block;
+}
+
+/* File Upload & List */
+.upload-zone.active {
+    border-color: var(--primary-color);
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+}
+
+.upload-zone.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) 0;
+}
+
+.file-icon {
+    font-size: 1.5rem;
+}
+
+.file-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevents long names from breaking layout */
+}
+
+.file-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9rem;
+}
+
+.file-size {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.file-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    padding: var(--space-xs);
+}
+
+.file-action-btn:hover {
+    color: var(--primary-color);
+}
+
+.file-actions {
+    display: flex;
+    align-items: center;
+}
+
+.file-action-btn.danger:hover {
+    color: var(--color-accent-danger, #ff3366);
+}
+
+/* Hide delete buttons for non-hosts when disabled */
+body:not(.is-host) .file-list.delete-disabled .file-action-btn[data-action="delete"] {
+    display: none;
+}
