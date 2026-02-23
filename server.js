@@ -1,8 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
 const mongoose = require('mongoose');
+const speakeasy = require('speakeasy');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,6 +13,7 @@ const io = new Server(server);
 // Global State
 const rooms = {}; // In-memory state for active rooms
 let isDbConnected = false; // Track DB connection status
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'Mgsai1042';
 
 // 1. MongoDB Connection
 // Ensure you have MongoDB running locally or use a cloud URI
@@ -98,7 +101,7 @@ app.delete('/api/delete-pad', async (req, res) => {
 
         const { roomId, secret } = req.body;
         
-        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+        if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
         if (!roomId) return res.status(400).json({ error: 'Room ID required' });
 
         await Pad.findOneAndDelete({ roomId });
@@ -128,7 +131,7 @@ app.get('/api/pads', async (req, res) => {
         }
 
         // Simple security check (Use ?secret=Mgsai1042 in URL)
-        if (req.query.secret !== 'Mgsai1042') {
+        if (req.query.secret !== ADMIN_SECRET) {
             return res.status(403).json({ error: 'Unauthorized access' });
         }
         
@@ -157,7 +160,7 @@ app.delete('/api/cleanup-pads', async (req, res) => {
         if (!isDbConnected) return res.status(503).json({ error: 'No DB' });
         
         const { secret, days } = req.body;
-        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+        if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
         
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - (days || 30)); // Default to 30 days
@@ -177,7 +180,7 @@ app.delete('/api/drop-database', async (req, res) => {
     try {
         if (!isDbConnected) return res.status(503).json({ error: 'No DB' });
         const { secret } = req.body;
-        if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+        if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
         await mongoose.connection.db.dropDatabase();
         console.log('💥 Database dropped successfully.');
@@ -195,9 +198,27 @@ app.delete('/api/drop-database', async (req, res) => {
     }
 });
 
+// Helper: Anonymize IP (Google Method)
+function anonymizeIP(ip) {
+    if (!ip) return "Unknown";
+    // Check if it's IPv4 (contains dots)
+    if (ip.includes('.')) {
+        const parts = ip.split('.');
+        if (parts.length === 4) {
+            return `${parts[0]}.${parts[1]}.${parts[2]}.XXX`;
+        }
+    }
+    // For IPv6, we mask the last 80 bits (simplified)
+    if (ip.includes(':')) {
+        const parts = ip.split(':');
+        return `${parts[0]}:${parts[1]}:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX`;
+    }
+    return ip;
+}
+
 // 4.3 API Route: Get Active Rooms & Users (Memory)
 app.get('/api/active-rooms', (req, res) => {
-    if (req.query.secret !== 'Mgsai1042') {
+    if (req.query.secret !== ADMIN_SECRET) {
         return res.status(403).json({ error: 'Unauthorized access' });
     }
     // Convert rooms object to array
@@ -205,7 +226,7 @@ app.get('/api/active-rooms', (req, res) => {
         roomId: r.id,
         roomName: r.name,
         type: r.type,
-        users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost }))
+        users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost, ip: u.ip }))
     }));
     res.json(activeData);
 });
@@ -213,7 +234,7 @@ app.get('/api/active-rooms', (req, res) => {
 // 4.4 API Route: Kick (Ban) User
 app.post('/api/kick-user', (req, res) => {
     const { socketId, secret } = req.body;
-    if (secret !== 'Mgsai1042') return res.status(403).json({ error: 'Unauthorized' });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
@@ -222,6 +243,34 @@ app.post('/api/kick-user', (req, res) => {
         res.json({ success: true, message: 'User kicked' });
     } else {
         res.status(404).json({ error: 'User not found or already disconnected' });
+    }
+});
+
+// 4.5 API Route: Admin Login with MFA
+app.post('/api/admin-login', (req, res) => {
+    const { adminSecret, token } = req.body;
+
+    // 1. Check the hardcoded password/secret first
+    if (adminSecret !== ADMIN_SECRET) {
+        return res.status(403).json({ message: "Invalid Admin Secret" });
+    }
+
+    // 2. Verify the 6-digit MFA token
+    if (!process.env.MFA_BASE32_SECRET) {
+        return res.status(500).json({ message: "MFA Secret not configured on server." });
+    }
+
+    const verified = speakeasy.totp.verify({
+        secret: process.env.MFA_BASE32_SECRET, // The secret from Step 2
+        encoding: 'base32',
+        token: token,
+        window: 1 // Allows 30s of "grace time" for clock drift
+    });
+
+    if (verified) {
+        res.json({ success: true, message: "Welcome, Creator." });
+    } else {
+        res.status(403).json({ message: "Invalid MFA Token" });
     }
 });
 
@@ -277,7 +326,7 @@ io.on('connection', (socket) => {
                     files: [],
                     content: savedPad.content, // Load encrypted content
                     hostId: socket.id,
-                    maxUsers: 20,
+                    maxUsers: 100,
                     permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
                 };
             }
@@ -324,11 +373,14 @@ io.on('connection', (socket) => {
     // Helper: Join Logic
     function joinRoomLogic(socket, roomId, userName, isHost) {
         const room = rooms[roomId];
+        const realIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+        const maskedIp = anonymizeIP(realIp);
         const user = { 
             id: socket.id, 
             name: userName, 
             isHost: isHost || socket.id === room.hostId,
-            permissions: { ...room.permissions } // Initialize with current room defaults
+            permissions: { ...room.permissions }, // Initialize with current room defaults
+            ip: maskedIp
         };
         
         room.users.push(user);

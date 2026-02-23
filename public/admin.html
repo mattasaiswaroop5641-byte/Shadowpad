@@ -72,6 +72,7 @@
         <p>Enter admin secret to continue</p>
         <form id="login-form">
             <input type="password" id="admin-secret" class="login-input" placeholder="Admin Secret" required>
+            <input type="text" id="mfa-token" class="login-input" placeholder="6-Digit MFA Code" maxlength="6" autocomplete="off" required>
             <button type="submit" class="btn-primary">Access Dashboard</button>
             <p id="login-error" class="error-msg"></p>
         </form>
@@ -143,19 +144,30 @@
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const secret = document.getElementById('admin-secret').value;
+            const token = document.getElementById('mfa-token').value;
             const errorMsg = document.getElementById('login-error');
             
             try {
-                await loadPads(secret);
-                // If successful:
-                currentSecret = secret;
-                document.getElementById('login-view').style.display = 'none';
-                document.getElementById('dashboard-view').style.display = 'block';
-                document.getElementById('active-view').style.display = 'block';
-                loadActiveUsers(secret);
-                startLiveUpdates();
+                const res = await fetch('/api/admin-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminSecret: secret, token })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    currentSecret = secret;
+                    document.getElementById('login-view').style.display = 'none';
+                    document.getElementById('dashboard-view').style.display = 'block';
+                    document.getElementById('active-view').style.display = 'block';
+                    loadPads(secret);
+                    loadActiveUsers(secret);
+                    startLiveUpdates();
+                } else {
+                    throw new Error(data.message);
+                }
             } catch (err) {
-                errorMsg.textContent = "Access Denied: Incorrect Secret";
+                errorMsg.textContent = err.message || "Access Denied";
                 errorMsg.style.display = 'block';
             }
         });

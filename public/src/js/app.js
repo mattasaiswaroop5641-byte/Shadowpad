@@ -443,7 +443,7 @@ function injectStyleSwitcher() {
                     <span>Max Users</span>
                     <span id="pad-max-users-val" style="color:var(--primary-color); font-weight:bold;">20</span>
                 </label>
-                <input type="range" id="pad-max-users" min="2" max="60" value="20" style="width:100%; margin-top:12px;">
+                <input type="range" id="pad-max-users" min="2" max="100" value="20" style="width:100%; margin-top:12px;">
             </div>
             <div class="pad-actions">
                 <button type="submit" class="btn btn-primary" title="Join existing note">Open Note</button>
@@ -768,7 +768,7 @@ function updateUserList(users) {
     });
     const count = users.length;
     userCountBadge.innerText = count;
-    userCounterText.innerText = `${count}/60`;
+    userCounterText.innerText = `${count}/100`;
 }
 
 // Handle Make Host Clicks
