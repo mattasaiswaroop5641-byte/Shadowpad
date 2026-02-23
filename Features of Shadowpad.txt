@@ -1,0 +1,70 @@
+🔐 Security & Encryption (The Core)
+End-to-End Encryption (E2E):
+Algorithm: Uses AES-256-GCM for message encryption.
+Protocol: Implements a Double Ratchet algorithm (similar to Signal/WhatsApp) for forward secrecy.
+Key Derivation: Uses PBKDF2 (100,000 iterations) to derive keys from the room password, followed by HKDF for chain keys.
+Admin Blindness: The server only stores encrypted blobs (ciphertext, iv, salt, step). It cannot read the content.
+Verification: A "Verify Encryption" tool in settings allows users to audit the cryptographic proof and latency in real-time.
+Hybrid Storage System:
+MongoDB Atlas: Persists encrypted data for up to 30 days.
+Memory Fallback: Automatically switches to RAM-only mode if the database connection fails, ensuring the app never goes down.
+Auto-Destruction: Pads are automatically deleted from the database if not accessed for 30 days (TTL index).
+👥 Collaboration & Room Management
+Dual Modes:
+Room Style: Full collaboration suite with sidebars for users, activity logs, and files.
+Notepad Style: Distraction-free, minimalist editor with a "Security Gold" border and specific encryption controls.
+Real-Time Sync: Instant text synchronization using WebSockets (Socket.IO).
+Host Authority System:
+Creator is King: The room creator is automatically assigned Host (👑) status.
+Auto-Migration: If the Host leaves, ownership is automatically transferred to the next user in the list.
+Promote Host: The Host can manually transfer ownership to another user.
+User Limits: Configurable slider to set max users per room (Range: 2 to 100).
+🛡️ Permissions & Moderation
+Granular Permissions: The Host can toggle specific rights for the whole room or individual users:
+✏️ Allow Edit: Enable/disable typing in the editor.
+📤 Allow Upload: Enable/disable file sharing.
+🗑️ Allow Delete: Enable/disable deleting files.
+Strict Enforcement: Server-side checks prevent users from bypassing UI restrictions (e.g., trying to upload when disabled).
+Kick/Ban:
+Host Kick: The Host can remove any user from the room.
+Admin Kick: The System Admin can kick users via the Admin Panel.
+✍️ Editor & Tools
+Rich Toolbar:
+Formatting: Bold (**), Italic (*), Code ( `).
+Actions: Copy Room Link, Clear Editor, Download as .txt.
+Live Statistics: Real-time Character and Word counters.
+Typing Indicators: Shows (typing...) next to a user's name in the list.
+Encrypted Actions (Notepad Mode):
+Secure Save: Encrypts current state and pushes to MongoDB.
+Encrypted Exit: Saves, clears local state, and leaves.
+Delete Pad: Permanently removes the encrypted blob from the database.
+📂 File Sharing
+Secure Transfer: Share files up to 25MB.
+Drag & Drop: Upload zone supports dragging files directly into the browser.
+File Management:
+Download: Users can download shared files.
+Delete: Users (with permission) can remove files from the shared list.
+🔧 Admin Panel ("God Mode")
+Secure Dashboard: Protected by a hardcoded secret key.
+Live Monitoring:
+View all active rooms and the number of users.
+IP Tracking: View the IP address of every connected user.
+Database Management:
+Storage Stats: View total pads and storage usage.
+Expiration Status: Color-coded badges showing days remaining before auto-deletion.
+Bulk Cleanup: One-click tool to delete pads older than X days.
+Nuclear Option: "Drop Database" button to wipe all data instantly.
+🧩 UX & Small Details
+Theming:
+Dark/Light Mode: Toggle switch in settings, persisted in localStorage.
+Custom Scrollbars: Styled to match the active theme.
+Input Sanitization:
+Room IDs are automatically converted to uppercase.
+Prefixes (ROOM:, NOTE:) are handled automatically in the URL and inputs.
+Visual Feedback:
+Connection Status: Green dot indicator in the nav bar.
+Lock Icon: Visual confirmation when encryption is active.
+Loading States: "Establishing secure connection..." overlay.
+Toast/Alerts: Custom alerts for errors (wrong password, room full).
+Password Visibility: Eye icon (👁️/🙈) to toggle password masking in forms.
+Activity Log: A scrolling log of events (User joined, User left, File uploaded, Host changed).
