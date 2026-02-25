@@ -286,7 +286,7 @@ io.on('connection', (socket) => {
             files: [],
             content: '',
             hostId: socket.id,
-            maxUsers: maxUsers || 20,
+            maxUsers: maxUsers || 100,
             permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
         };
         
@@ -317,7 +317,7 @@ io.on('connection', (socket) => {
                     files: [],
                     content: savedPad.content, // Load encrypted content
                     hostId: socket.id,
-                    maxUsers: 20,
+                    maxUsers: 100,
                     permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
                 };
             }
