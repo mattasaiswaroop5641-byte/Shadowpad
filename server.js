@@ -295,7 +295,7 @@ io.on('connection', (socket) => {
             files: [],
             content: '',
             hostId: socket.id,
-            maxUsers: maxUsers || 20,
+            maxUsers: maxUsers || 100,
             permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
         };
         
@@ -393,6 +393,7 @@ io.on('connection', (socket) => {
             users: room.users,
             isHost: user.isHost,
             files: room.files,
+            maxUsers: room.maxUsers,
             permissions: user.permissions // Send user's specific permissions
         });
         

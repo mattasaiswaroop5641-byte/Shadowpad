@@ -35,6 +35,7 @@ const wordCountDisplay = document.getElementById('word-count');
 let currentRoomId = null;
 let roomFiles = []; // Local cache for file content
 let isPadMode = false;
+let currentMaxUsers = 100; // Default, will be updated on join
 let roomPassword = ''; // Store password for encryption
 let typingTimeout;
 let shadowRatchet = null; // Instance of our Double Ratchet
@@ -600,8 +601,9 @@ function applyPermissions(data) {
     }
 }
 
-async function enterRoom(id, name, content, users, isHost, files, permissions) {
+async function enterRoom(id, name, content, users, isHost, files, permissions, maxUsers) {
     currentRoomId = id;
+    currentMaxUsers = maxUsers || 100;
     authModule.classList.remove('active');
     appModule.classList.add('active');
 
@@ -691,8 +693,8 @@ async function enterRoom(id, name, content, users, isHost, files, permissions) {
     }
 }
 
-socket.on('room-created', (data) => enterRoom(data.roomId, data.roomName, "", data.users, data.isHost, data.files, data.permissions));
-socket.on('joined-successfully', (data) => enterRoom(data.roomId, data.roomName, data.content, data.users, data.isHost, data.files, data.permissions));
+socket.on('room-created', (data) => enterRoom(data.roomId, data.roomName, "", data.users, data.isHost, data.files, data.permissions, data.maxUsers));
+socket.on('joined-successfully', (data) => enterRoom(data.roomId, data.roomName, data.content, data.users, data.isHost, data.files, data.permissions, data.maxUsers));
 socket.on('error-msg', (msg) => alert(msg));
 socket.on('kicked', () => {
     alert('You have been kicked by the admin.');
@@ -768,7 +770,7 @@ function updateUserList(users) {
     });
     const count = users.length;
     userCountBadge.innerText = count;
-    userCounterText.innerText = `${count}/100`;
+    userCounterText.innerText = `${count}/${currentMaxUsers}`;
 }
 
 // Handle Make Host Clicks
@@ -957,14 +959,29 @@ if (grantAllBtn) {
     });
 }
 
+// --- Performance: Debounce function ---
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
+
+// Debounced version of the text update function
+const debouncedUpdateText = debounce((roomId, content) => {
+    socket.emit('update-text', { roomId, content });
+}, 250); // Send update every 250ms
+
 // Real-time Text Syncing
 editor.addEventListener('input', () => {
     updateCounts();
     if (currentRoomId) {
-        socket.emit('update-text', {
-            roomId: currentRoomId,
-            content: editor.value
-        });
+        debouncedUpdateText(currentRoomId, editor.value);
 
         // Typing Indicator
         socket.emit('typing', { roomId: currentRoomId, isTyping: true });
