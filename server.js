@@ -383,6 +383,7 @@ io.on('connection', (socket) => {
             users: room.users,
             isHost: user.isHost,
             files: room.files,
+            maxUsers: room.maxUsers,
             permissions: user.permissions // Send user's specific permissions
         });
         
