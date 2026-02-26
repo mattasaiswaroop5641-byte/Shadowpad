@@ -239,13 +239,18 @@
         async function loadPads(secret = currentSecret) {
             const tbody = document.getElementById('pad-list');
             try {
-                const res = await fetch(`/api/pads?secret=${encodeURIComponent(secret)}&page=${currentPage}`);
+                const res = await fetch(`/api/pads?secret=${encodeURIComponent(secret)}&page=${currentPage}&_t=${Date.now()}`);
                 if (!res.ok) {
                     // Attempt to read error message from server
                     const errText = await res.text(); 
                     throw new Error(`Status ${res.status}: ${errText}`);
                 }
                 const data = await res.json();
+
+                // Update Stats (Global)
+                document.getElementById('total-pads').textContent = data.stats.totalCount;
+                document.getElementById('total-size').textContent = formatBytes(data.stats.totalSize);
+
                 const pads = data.pads;
 
                 if (!Array.isArray(pads) || pads.length === 0) {
@@ -254,10 +259,6 @@
                     document.getElementById('total-size').textContent = '0 Bytes';
                     return;
                 }
-
-                // Update Stats
-                document.getElementById('total-pads').textContent = data.stats.totalCount;
-                document.getElementById('total-size').textContent = formatBytes(data.stats.totalSize);
 
                 tbody.innerHTML = pads.map(pad => {
                     const lastActive = new Date(pad.lastActive);
