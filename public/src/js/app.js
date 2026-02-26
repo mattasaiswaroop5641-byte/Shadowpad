@@ -51,6 +51,9 @@ class ShadowRatchet {
     // 1. Initialization: PBKDF2 (100,000 iterations)
     async init(password, saltHex = null) {
         const enc = new TextEncoder();
+        if (!password || password.trim() === "") {
+            throw new Error("ShadowRatchet requires a password for initialization.");
+        }
         // Use provided salt (from server) or generate new one (for new pads)
         if (saltHex) {
             this.salt = this.hex2buf(saltHex);
