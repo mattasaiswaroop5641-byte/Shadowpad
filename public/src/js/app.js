@@ -51,8 +51,8 @@ class ShadowRatchet {
     // 1. Initialization: PBKDF2 (100,000 iterations)
     async init(password, saltHex = null) {
         const enc = new TextEncoder();
-        if (!password || password.trim() === "") {
-            throw new Error("ShadowRatchet requires a password for initialization.");
+        if (!password || /\s/.test(password)) {
+            throw new Error("ShadowRatchet requires a password without spaces.");
         }
         // Use provided salt (from server) or generate new one (for new pads)
         if (saltHex) {
@@ -438,7 +438,7 @@ function injectStyleSwitcher() {
             <div class="input-group">
                 <label>Password</label>
                 <div class="password-wrapper">
-                    <input type="password" id="pad-password" placeholder="Enter password" required>
+                    <input type="password" id="pad-password" placeholder="Enter password" pattern="^\\S+$" title="Password cannot contain spaces" required>
                     <button type="button" class="toggle-password">👁️</button>
                 </div>
             </div>

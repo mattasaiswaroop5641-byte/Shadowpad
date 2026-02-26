@@ -271,7 +271,7 @@
         <script type="module" src="src/js/app.js"></script>
         <script>
             function copyToClipboard(elementId) {
-                const text = document.getElementById(elementId).textContent;
+                const text = document.getElementById(elementId).textContent.trim();
                 navigator.clipboard.writeText(text).then(() => {
                     alert('Copied: ' + text);
                 });

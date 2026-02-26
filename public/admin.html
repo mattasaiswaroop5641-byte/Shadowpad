@@ -242,7 +242,7 @@
                 }
                 const pads = await res.json();
 
-                if (pads.length === 0) {
+                if (!Array.isArray(pads) || pads.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pads found in database.</td></tr>';
                     return;
                 }
@@ -318,6 +318,11 @@
                 const res = await fetch(`/api/active-rooms?secret=${encodeURIComponent(secret)}`);
                 if (!res.ok) throw new Error('Failed to fetch active users');
                 const allSessions = await res.json();
+
+                if (!Array.isArray(allSessions)) {
+                    console.error('Expected array of sessions, got:', allSessions);
+                    return;
+                }
 
                 const rooms = allSessions.filter(r => r.type !== 'notepad');
                 const notepads = allSessions.filter(r => r.type === 'notepad');
