@@ -38,7 +38,7 @@
                         <form id="create-form" class="auth-form active">
                             <div class="input-group">
                                 <label>Room Name</label>
-                                <input type="text" id="room-name" placeholder="e.g., Project Alpha" required>
+                                <input type="text" id="room-name" placeholder="e.g., Project-Alpha" pattern="^\S+$" title="Room name cannot contain spaces" required>
                             </div>
                         
                             <div class="input-group">
@@ -72,7 +72,7 @@
                         <form id="join-form" class="auth-form">
                             <div class="input-group">
                                 <label>Room ID</label>
-                                <input type="text" id="join-room-id" placeholder="Paste room ID" required>
+                                <input type="text" id="join-room-id" placeholder="Paste room ID" pattern="^\S+$" title="Room ID cannot contain spaces" required>
                             </div>
                         
                             <div class="input-group">

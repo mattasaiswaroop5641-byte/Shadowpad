@@ -437,7 +437,7 @@ function injectStyleSwitcher() {
         <form id="pad-form" class="auth-form">
             <div class="input-group">
                 <label>Note Name / Room ID</label>
-                <input type="text" id="pad-name" placeholder="e.g. my-secret-note" required>
+                <input type="text" id="pad-name" placeholder="e.g. my-secret-note" pattern="^\\S+$" title="Note name cannot contain spaces" required>
             </div>
             <div class="input-group">
                 <label>Password</label>
