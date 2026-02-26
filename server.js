@@ -199,11 +199,28 @@ app.delete('/api/drop-database', async (req, res) => {
 });
 
 // Helper: Anonymize IP (Google Method)
+<<<<<<< HEAD
 function anonymizeIp(ip) {
     if (!ip) return 'Unknown';
     if (ip.startsWith('::ffff:')) ip = ip.substring(7); // Handle IPv4-mapped IPv6
     const parts = ip.split('.');
     if (parts.length === 4) return `${parts[0]}.${parts[1]}.${parts[2]}.XXX`;
+=======
+function anonymizeIP(ip) {
+    if (!ip) return "Unknown";
+    // Check if it's IPv4 (contains dots)
+    if (ip.includes('.')) {
+        const parts = ip.split('.');
+        if (parts.length === 4) {
+            return `${parts[0]}.${parts[1]}.${parts[2]}.XXX`;
+        }
+    }
+    // For IPv6, we mask the last 80 bits (simplified)
+    if (ip.includes(':')) {
+        const parts = ip.split(':');
+        return `${parts[0]}:${parts[1]}:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX`;
+    }
+>>>>>>> e82be50f8311c04e769198368475e0c9ee9ca7e5
     return ip;
 }
 
@@ -217,7 +234,11 @@ app.get('/api/active-rooms', (req, res) => {
         roomId: r.id,
         roomName: r.name,
         type: r.type,
+<<<<<<< HEAD
         users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost, ip: anonymizeIp(u.ip) }))
+=======
+        users: r.users.map(u => ({ id: u.id, name: u.name, isHost: u.isHost, ip: u.ip }))
+>>>>>>> e82be50f8311c04e769198368475e0c9ee9ca7e5
     }));
     res.json(activeData);
 });
@@ -364,13 +385,22 @@ io.on('connection', (socket) => {
     // Helper: Join Logic
     function joinRoomLogic(socket, roomId, userName, isHost) {
         const room = rooms[roomId];
+<<<<<<< HEAD
         const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+=======
+        const realIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+        const maskedIp = anonymizeIP(realIp);
+>>>>>>> e82be50f8311c04e769198368475e0c9ee9ca7e5
         const user = { 
             id: socket.id, 
             name: userName, 
             isHost: isHost || socket.id === room.hostId,
             permissions: { ...room.permissions }, // Initialize with current room defaults
+<<<<<<< HEAD
             ip: ip
+=======
+            ip: maskedIp
+>>>>>>> e82be50f8311c04e769198368475e0c9ee9ca7e5
         };
         
         room.users.push(user);
