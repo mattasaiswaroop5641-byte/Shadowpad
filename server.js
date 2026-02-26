@@ -13,6 +13,7 @@ const io = new Server(server);
 // Global State
 const rooms = {}; // In-memory state for active rooms
 let isDbConnected = false; // Track DB connection status
+const loginAttempts = new Map(); // Simple rate limiting
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'Mgsai1042';
 
 // 1. MongoDB Connection
@@ -55,9 +56,21 @@ mongoose.connect(MONGO_URI)
 const PadSchema = new mongoose.Schema({
     roomId: { type: String, required: true, unique: true },
     content: { type: String, default: "" }, // Stores the Encrypted Blob
-    lastActive: { type: Date, default: Date.now, expires: 2592000 } // Auto-delete if inactive for 30 days (30 * 24 * 60 * 60)
+    lastActive: { type: Date, default: Date.now, expires: 259200 } // Auto-delete if inactive for 3 days (3 * 24 * 60 * 60)
 });
 const Pad = mongoose.model('Pad', PadSchema);
+
+// 2.1 Define Room Schema (For Persistence)
+const RoomSchema = new mongoose.Schema({
+    roomId: { type: String, required: true, unique: true },
+    name: String,
+    type: { type: String, default: 'room' },
+    password: { type: String, required: true },
+    maxUsers: { type: Number, default: 20 },
+    permissions: { allowEdit: Boolean, allowUpload: Boolean, allowDelete: Boolean },
+    lastActive: { type: Date, default: Date.now } // Persistent metadata (No auto-delete)
+});
+const Room = mongoose.model('Room', RoomSchema);
 
 // 3. Middleware
 app.use(express.static(path.join(__dirname, 'public')));
@@ -106,7 +119,10 @@ app.delete('/api/delete-pad', async (req, res) => {
         if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
         if (!roomId) return res.status(400).json({ error: 'Room ID required' });
 
-        await Pad.findOneAndDelete({ roomId });
+        await Promise.all([
+            Pad.findOneAndDelete({ roomId }),
+            Room.findOneAndDelete({ roomId })
+        ]);
         
         // Disconnect all users in the deleted room
         if (rooms[roomId]) {
@@ -137,20 +153,38 @@ app.get('/api/pads', async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized access' });
         }
         
+        const page = parseInt(req.query.page) || 1;
+        const limit = 100;
+
+        // Get global stats for the dashboard
+        const stats = await Pad.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalCount: { $sum: 1 },
+                    totalSize: { $sum: { $cond: [{ $ifNull: ["$content", false] }, { $strLenCP: "$content" }, 0] } }
+                }
+            }
+        ]);
+
         // Optimization: Use Aggregation to get size without fetching full content
-        // This prevents the browser from crashing if you have 100MB+ of data
         const pads = await Pad.aggregate([
             { 
                 $project: { 
                     roomId: { $ifNull: ["$roomId", "UNKNOWN_ID"] }, 
                     lastActive: { $ifNull: ["$lastActive", new Date(0)] }, 
-                    size: { $cond: [{ $ifNull: ["$content", false] }, { $strLenCP: "$content" }, 0] } 
+                    size: { $cond: [{ $ifNull: ["$content", false] }, { $strLenCP: "$content" }, 0] }
                 } 
             },
             { $sort: { lastActive: -1 } },
-            { $limit: 500 } // Optimization: Only load the last 500 active pads
+            { $skip: (page - 1) * limit },
+            { $limit: limit }
         ]);
-        res.json(pads);
+
+        res.json({
+            pads,
+            stats: stats[0] || { totalCount: 0, totalSize: 0 }
+        });
     } catch (error) {
         res.status(500).json({ error: 'Database error' });
     }
@@ -167,10 +201,14 @@ app.delete('/api/cleanup-pads', async (req, res) => {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - (days || 30)); // Default to 30 days
         
-        const result = await Pad.deleteMany({ lastActive: { $lt: cutoff } });
-        console.log(`🧹 Cleaned up ${result.deletedCount} old pads.`);
+        const [padResult, roomResult] = await Promise.all([
+            Pad.deleteMany({ lastActive: { $lt: cutoff } }),
+            Room.deleteMany({ lastActive: { $lt: cutoff } })
+        ]);
+
+        console.log(`🧹 Cleaned up ${padResult.deletedCount} pads and ${roomResult.deletedCount} room records.`);
         
-        res.json({ success: true, count: result.deletedCount, message: `Deleted ${result.deletedCount} pads older than ${days || 30} days.` });
+        res.json({ success: true, count: padResult.deletedCount, message: `Deleted ${padResult.deletedCount} records older than ${days || 30} days.` });
     } catch (error) {
         console.error('Cleanup failed:', error);
         res.status(500).json({ error: 'Cleanup failed' });
@@ -250,6 +288,15 @@ app.post('/api/kick-user', (req, res) => {
 // 4.5 API Route: Admin Login with MFA
 app.post('/api/admin-login', (req, res) => {
     const { adminSecret, token } = req.body;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    // Simple Rate Limiting
+    const now = Date.now();
+    const lastAttempt = loginAttempts.get(ip) || 0;
+    if (now - lastAttempt < 2000) {
+        return res.status(429).json({ message: "Too many attempts. Please wait." });
+    }
+    loginAttempts.set(ip, now);
 
     // 1. Check the hardcoded password/secret first
     if (adminSecret !== ADMIN_SECRET) {
@@ -280,11 +327,11 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Create Room
-    socket.on('create-room', ({ roomName, password, userName, maxUsers, type }) => {
+    socket.on('create-room', async ({ roomName, password, userName, maxUsers, type }) => {
         const roomId = roomName.toUpperCase();
-        if (rooms[roomId]) {
-            socket.emit('error-msg', 'Room already exists');
-            return;
+        const existingRoom = await Room.findOne({ roomId });
+        if (existingRoom || rooms[roomId]) {
+            return socket.emit('error-msg', 'Room already exists');
         }
         
         rooms[roomId] = {
@@ -299,6 +346,16 @@ io.on('connection', (socket) => {
             maxUsers: maxUsers || 100,
             permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
         };
+
+        // Persist Room Metadata
+        await Room.create({
+            roomId,
+            name: roomName,
+            type: type || 'room',
+            password,
+            maxUsers: maxUsers || 100,
+            permissions: rooms[roomId].permissions
+        });
         
         joinRoomLogic(socket, roomId, userName, true);
     });
@@ -308,25 +365,23 @@ io.on('connection', (socket) => {
         let room = rooms[roomId];
 
         // If room not active, check MongoDB
-        if (!room && isDbConnected) {
-            // Find and update lastActive to reset the 30-day timer
-            const savedPad = await Pad.findOneAndUpdate(
-                { roomId },
-                { lastActive: Date.now() },
-                { new: true }
-            );
+        if (!room) {
+            const [savedPad, savedRoom] = await Promise.all([
+                Pad.findOneAndUpdate({ roomId }, { lastActive: Date.now() }, { new: true }), // Refresh Pad timer
+                Room.findOneAndUpdate({ roomId }, { lastActive: Date.now() }, { new: true })  // Refresh Room timer
+            ]);
 
-            if (savedPad) {
+            if (savedPad && savedRoom) {
                 // Restore room from DB
                 room = rooms[roomId] = {
                     id: roomId,
-                    name: roomId,
-                    type: 'notepad', // Restored pads are treated as Notepads
-                    password: password, // The password entered becomes the session key
+                    name: savedRoom.name,
+                    type: savedRoom.type,
+                    password: savedRoom.password,
                     users: [],
                     files: [],
-                    content: savedPad.content, // Load encrypted content
-                    hostId: socket.id,
+                    content: savedPad.content,
+                    hostId: socket.id, // First person to rejoin becomes host
                     maxUsers: 100,
                     permissions: { allowEdit: true, allowUpload: true, allowDelete: true }
                 };
@@ -501,10 +556,10 @@ io.on('connection', (socket) => {
     });
 
     // Handle Disconnect
-    socket.on('disconnect', () => {
-        Object.keys(rooms).forEach(roomId => {
+    socket.on('disconnect', async () => {
+        for (const roomId of Object.keys(rooms)) {
             const room = rooms[roomId];
-            if (!room) return;
+            if (!room) continue;
 
             const index = room.users.findIndex(u => u.id === socket.id);
             if (index !== -1) {
@@ -513,8 +568,22 @@ io.on('connection', (socket) => {
                 room.users.splice(index, 1);
 
                 if (room.users.length === 0) {
+                    const isRoomType = room.type === 'room';
                     delete rooms[roomId];
                     console.log(`Room ${roomId} deleted from memory (empty).`);
+
+                    // INSTANT DELETE for 'room' type to save DB storage
+                    if (isDbConnected && isRoomType) {
+                        try {
+                            await Promise.all([
+                                Pad.findOneAndDelete({ roomId }),
+                                Room.findOneAndDelete({ roomId })
+                            ]);
+                            console.log(`Room and Pad ${roomId} deleted from DB (empty).`);
+                        } catch (err) {
+                            console.error(`Cleanup failed for ${roomId}:`, err);
+                        }
+                    }
                 } else {
                     if (wasHost) {
                         const newHost = room.users[0];
@@ -529,7 +598,7 @@ io.on('connection', (socket) => {
                     io.to(roomId).emit('activity-log', `${user.name} left.`);
                 }
             }
-        });
+        }
     });
 });
 

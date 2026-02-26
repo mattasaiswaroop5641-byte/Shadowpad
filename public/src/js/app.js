@@ -38,14 +38,17 @@ let isPadMode = false;
 let currentMaxUsers = 100; // Default, will be updated on join
 let roomPassword = ''; // Store password for encryption
 let typingTimeout;
+let isDecryptionFailed = false;
 let shadowRatchet = null; // Instance of our Double Ratchet
 
 // --- ShadowRatchet: WhatsApp-Level Symmetric Ratchet ---
 class ShadowRatchet {
     constructor() {
         this.chainKey = null;
+        this.rootKey = null; // The Root Key (RK) for the Diffie-Hellman chain
         this.step = 0;
         this.salt = null;
+        this.dhPair = null; // Stores our ECDH Key Pair
     }
 
     // 1. Initialization: PBKDF2 (100,000 iterations)
@@ -82,6 +85,7 @@ class ShadowRatchet {
             true, // Extractable to feed into HKDF
             ["encrypt", "decrypt"]
         );
+        this.rootKey = this.chainKey; // Initially, Root Key = Password Derived Key
         this.step = 0;
     }
 
@@ -114,6 +118,56 @@ class ShadowRatchet {
         this.step++;
 
         return messageKey;
+    }
+
+    // --- Double Ratchet: Diffie-Hellman Extensions ---
+
+    // 5. Generate Ephemeral Key Pair (ECDH P-256)
+    async generateDH() {
+        this.dhPair = await window.crypto.subtle.generateKey(
+            { name: "ECDH", namedCurve: "P-256" },
+            true,
+            ["deriveBits"]
+        );
+        // Return raw public key to send to peer
+        return await window.crypto.subtle.exportKey("raw", this.dhPair.publicKey);
+    }
+
+    // 6. Compute Shared Secret (DHE)
+    async computeDH(theirPubRaw) {
+        const theirPub = await window.crypto.subtle.importKey(
+            "raw", 
+            theirPubRaw, 
+            { name: "ECDH", namedCurve: "P-256" }, 
+            false, 
+            []
+        );
+        
+        return window.crypto.subtle.deriveBits(
+            { name: "ECDH", public: theirPub },
+            this.dhPair.privateKey,
+            256
+        );
+    }
+
+    // 7. The "Root" Ratchet: Updates Root Key based on DH output
+    async rootRatchet(theirPubRaw) {
+        const dhSecret = await this.computeDH(theirPubRaw);
+        
+        const rawRoot = await window.crypto.subtle.exportKey("raw", this.rootKey);
+        const rootKeyMaterial = await window.crypto.subtle.importKey("raw", rawRoot, { name: "HKDF" }, false, ["deriveKey"]);
+
+        this.rootKey = await window.crypto.subtle.deriveKey(
+            { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(dhSecret), info: new TextEncoder().encode("ROOT") },
+            rootKeyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+        );
+
+        this.chainKey = await window.crypto.subtle.deriveKey(
+            { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(dhSecret), info: new TextEncoder().encode("CHAIN") },
+            rootKeyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+        );
+        
+        this.step = 0;
     }
 
     async encrypt(text) {
@@ -437,7 +491,7 @@ function injectStyleSwitcher() {
         <form id="pad-form" class="auth-form">
             <div class="input-group">
                 <label>Note Name / Room ID</label>
-                <input type="text" id="pad-name" placeholder="e.g. my-secret-note" pattern="^\\S+$" title="Note name cannot contain spaces" required>
+                <input type="text" id="pad-name" placeholder="e.g. my-secret-note" required>
             </div>
             <div class="input-group">
                 <label>Password</label>
@@ -612,6 +666,7 @@ async function enterRoom(id, name, content, users, isHost, files, permissions, m
     currentRoomId = id;
     currentMaxUsers = maxUsers || 100;
     authModule.classList.remove('active');
+    isDecryptionFailed = false;
     appModule.classList.add('active');
 
     if (isPadMode) {
@@ -658,6 +713,7 @@ async function enterRoom(id, name, content, users, isHost, files, permissions, m
             } catch (e) {
                 if (isEncryptedPayload) {
                     console.error("Decryption failed", e);
+                    isDecryptionFailed = true;
                     content = "--- 🔒 ENCRYPTED DATA (WRONG PASSWORD OR LEGACY FORMAT) ---";
                 }
             }
@@ -987,7 +1043,7 @@ const debouncedUpdateText = debounce((roomId, content) => {
 // Real-time Text Syncing
 editor.addEventListener('input', () => {
     updateCounts();
-    if (currentRoomId) {
+    if (currentRoomId && !isDecryptionFailed) {
         debouncedUpdateText(currentRoomId, editor.value);
 
         // Typing Indicator
@@ -1000,6 +1056,8 @@ editor.addEventListener('input', () => {
 });
 
 socket.on('text-synced', (content) => {
+    if (editor.value === content) return; // Prevent cursor jump if content is identical
+
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
     editor.value = content;
