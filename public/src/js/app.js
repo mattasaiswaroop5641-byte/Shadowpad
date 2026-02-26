@@ -138,7 +138,11 @@ class ShadowRatchet {
 
     // Helpers
     buf2hex(buf) { return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2,'0')).join(''); }
-    hex2buf(hex) { return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))); }
+    hex2buf(hex) {
+        if (!hex || typeof hex !== 'string') return new Uint8Array(0);
+        const matches = hex.match(/.{1,2}/g);
+        return new Uint8Array(matches ? matches.map(byte => parseInt(byte, 16)) : []);
+    }
 }
 
 // --- Theme Initialization ---
